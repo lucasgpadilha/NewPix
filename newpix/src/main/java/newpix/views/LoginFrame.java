@@ -13,16 +13,26 @@ public class LoginFrame extends JFrame {
     private final JTextField cpfField;
     private final JPasswordField senhaField;
     private final JButton btnEntrar;
+    private final JTextField ipField;
+    private final JTextField portaField;
 
     public LoginFrame(JFrame parent) {
         setTitle("NewPix - Login");
-        setSize(400, 200);
+        setSize(400, 250);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(parent);
         setLayout(new BorderLayout(10, 10));
 
-        JPanel panel = new JPanel(new GridLayout(3, 2, 5, 5));
+        JPanel panel = new JPanel(new GridLayout(5, 2, 5, 5));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        panel.add(new JLabel("IP do Servidor:"));
+        ipField = new JTextField("127.0.0.1");
+        panel.add(ipField);
+
+        panel.add(new JLabel("Porta do Servidor:"));
+        portaField = new JTextField("12345");
+        panel.add(portaField);
 
         panel.add(new JLabel("CPF (000.000.000-00):"));
         cpfField = new JTextField();
@@ -52,15 +62,16 @@ public class LoginFrame extends JFrame {
     private void attemptLogin() {
         String cpf = cpfField.getText();
         String senha = new String(senhaField.getPassword());
-        
+        String ip = ipField.getText();
+        String portaStr = portaField.getText();
+
         try {
+            int porta = Integer.parseInt(portaStr);
             Cliente cliente = Cliente.getInstance();
             cliente.setLoginFrame(this); // Informa ao cliente qual tela está ativa
 
             if (!cliente.isConnected()) {
-                String ip = "127.0.0.1"; // Pode ser solicitado via JOptionPane
-                int port = 12345;     // Pode ser solicitado via JOptionPane
-                cliente.startConnection(ip, port);
+                cliente.startConnection(ip, porta);
             }
 
             // Criar e enviar a requisição de login
@@ -75,6 +86,8 @@ public class LoginFrame extends JFrame {
 
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(this, "Erro de conexão: " + ex.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Porta inválida.", "Erro", JOptionPane.ERROR_MESSAGE);
         }
     }
 

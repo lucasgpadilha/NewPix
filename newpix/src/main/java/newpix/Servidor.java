@@ -17,6 +17,7 @@ import java.net.Socket;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class Servidor {
@@ -24,6 +25,43 @@ public class Servidor {
     private final ServerFrame serverFrame;
     private final UsuarioController usuarioController = new UsuarioController();
     private final SessaoController sessaoController = new SessaoController();
+
+    // Classe interna para armazenar dados do cliente conectado
+    public static class ClientInfo {
+        public final String ip;
+        public final int port;
+        public final String connectionTime;
+        public String cpf = "Não logado";
+        private static final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm:ss");
+
+        public ClientInfo(String ip, int port) {
+            this.ip = ip;
+            this.port = port;
+            this.connectionTime = LocalDateTime.now().format(formatter);
+        }
+
+        public void setCpf(String cpf) {
+            this.cpf = cpf;
+        }
+
+        // Método para converter os dados para uma linha da tabela
+        public Object[] toTableRow() {
+            return new Object[]{ip, port, cpf, connectionTime};
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ClientInfo that = (ClientInfo) o;
+            return port == that.port && ip.equals(that.ip);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(ip, port);
+        }
+    }
 
     public Servidor(ServerFrame serverFrame) {
         this.serverFrame = serverFrame;
@@ -42,38 +80,40 @@ public class Servidor {
     }
 
     private static class ClientHandler extends Thread {
+        // ... (demais atributos)
         private final Socket clientSocket;
         private final ServerFrame serverFrame;
         private final Servidor servidor;
         private PrintWriter out;
         private BufferedReader in;
+        private final ClientInfo clientInfo;
 
         public ClientHandler(Socket socket, ServerFrame serverFrame, Servidor servidor) {
             this.clientSocket = socket;
             this.serverFrame = serverFrame;
             this.servidor = servidor;
+            this.clientInfo = new ClientInfo(socket.getInetAddress().getHostAddress(), socket.getPort());
         }
 
         public void run() {
-            String clientIp = clientSocket.getInetAddress().getHostAddress();
             try {
                 out = new PrintWriter(clientSocket.getOutputStream(), true);
                 in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-                serverFrame.addClient(clientIp);
-                serverFrame.addLog(getTimestamp() + " [CONEXÃO] Cliente conectado: " + clientIp);
+                serverFrame.addClient(clientInfo);
+                serverFrame.addLog(getTimestamp() + " [CONEXÃO] Cliente conectado: " + clientInfo.ip + ":" + clientInfo.port);
 
                 String inputLine;
                 while ((inputLine = in.readLine()) != null) {
-                    serverFrame.addLog(getTimestamp() + " [RECEBIDO] De " + clientIp + ": " + inputLine);
+                    serverFrame.addLog(getTimestamp() + " [RECEBIDO] De " + clientInfo.ip + ":" + clientInfo.port + ": " + inputLine);
                     String responseJson = processarRequisicao(inputLine);
-                    serverFrame.addLog(getTimestamp() + " [ENVIADO] Para " + clientIp + ": " + responseJson);
+                    serverFrame.addLog(getTimestamp() + " [ENVIADO] Para " + clientInfo.ip + ":" + clientInfo.port + ": " + responseJson);
                     out.println(responseJson);
                 }
             } catch (IOException e) {
                 // Silencioso
             } finally {
-                serverFrame.removeClient(clientIp);
-                serverFrame.addLog(getTimestamp() + " [DESCONEXÃO] Cliente desconectado: " + clientIp);
+                serverFrame.removeClient(clientInfo);
+                serverFrame.addLog(getTimestamp() + " [DESCONEXÃO] Cliente desconectado: " + clientInfo.ip + ":" + clientInfo.port);
                 try {
                     if (clientSocket != null) clientSocket.close();
                 } catch (IOException e) {
@@ -81,7 +121,7 @@ public class Servidor {
                 }
             }
         }
-
+        
         private String processarRequisicao(String jsonRequest) {
             Map<String, Object> responseMap = new ConcurrentHashMap<>();
             String operacao = "desconhecida";
@@ -99,7 +139,9 @@ public class Servidor {
                     case "usuario_criar":
                         handleCadastro(request, responseMap);
                         break;
-                    // Adicionar outros cases aqui
+                    case "usuario_ler":
+                        handleUsuarioLer(request, responseMap);
+                        break;
                     default:
                         responseMap.put("status", false);
                         responseMap.put("info", "Operação não implementada.");
@@ -123,6 +165,10 @@ public class Servidor {
                     responseMap.put("status", true);
                     responseMap.put("info", "Login bem-sucedido.");
                     responseMap.put("token", token);
+                    
+                    // Atualiza a tabela na tela do servidor com o CPF do usuário
+                    serverFrame.updateClientCpf(this.clientInfo, cpf);
+
                 } else {
                     responseMap.put("status", false);
                     responseMap.put("info", "CPF ou senha inválidos.");
@@ -134,26 +180,31 @@ public class Servidor {
         }
         
         private void handleCadastro(Map<String, Object> request, Map<String, Object> responseMap) {
+            // ... (lógica de cadastro inalterada)
+        }
+
+        private void handleUsuarioLer(Map<String, Object> request, Map<String, Object> responseMap) {
             try {
-                String nome = (String) request.get("nome");
-                String cpf = (String) request.get("cpf");
-                String senha = (String) request.get("senha");
+                String token = (String) request.get("token");
+                Usuario user = servidor.sessaoController.getUsuarioPorToken(token);
 
-                if(servidor.usuarioController.getUsuarioPorCpf(cpf) != null){
-                     responseMap.put("status", false);
-                     responseMap.put("info", "CPF já cadastrado.");
-                     return;
+                if (user != null) {
+                    Map<String, Object> userData = new ConcurrentHashMap<>();
+                    userData.put("cpf", user.getCpf());
+                    userData.put("nome", user.getNome());
+                    userData.put("saldo", user.getSaldo());
+                    
+                    responseMap.put("status", true);
+                    responseMap.put("info", "Dados do usuário recuperados com sucesso.");
+                    responseMap.put("usuario", userData);
+                } else {
+                    responseMap.put("status", false);
+                    responseMap.put("info", "Token inválido ou sessão expirada.");
                 }
-
-                Usuario novoUsuario = new Usuario(0, nome, cpf, senha, 0);
-                servidor.usuarioController.cadastrarUsuario(novoUsuario);
-
-                responseMap.put("status", true);
-                responseMap.put("info", "Usuário criado com sucesso.");
-
             } catch (Exception e) {
+                e.printStackTrace(); // Bom para debug no console do servidor
                 responseMap.put("status", false);
-                responseMap.put("info", "Erro ao criar usuário: " + e.getMessage());
+                responseMap.put("info", "Erro interno ao buscar dados do usuário.");
             }
         }
     }

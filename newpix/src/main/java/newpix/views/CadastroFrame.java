@@ -14,16 +14,26 @@ public class CadastroFrame extends JFrame {
     private final JPasswordField senhaField;
     private final JButton btnCadastrar;
     private final JFrame parentFrame;
+    private final JTextField ipField;
+    private final JTextField portaField;
 
     public CadastroFrame(JFrame parent) {
         this.parentFrame = parent;
         setTitle("NewPix - Cadastro");
-        setSize(400, 250);
+        setSize(400, 300);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(parent);
 
-        JPanel panel = new JPanel(new GridLayout(4, 2, 5, 5));
+        JPanel panel = new JPanel(new GridLayout(6, 2, 5, 5));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        panel.add(new JLabel("IP do Servidor:"));
+        ipField = new JTextField("127.0.0.1");
+        panel.add(ipField);
+
+        panel.add(new JLabel("Porta do Servidor:"));
+        portaField = new JTextField("12345");
+        panel.add(portaField);
 
         panel.add(new JLabel("Nome Completo:"));
         nomeField = new JTextField();
@@ -52,12 +62,15 @@ public class CadastroFrame extends JFrame {
     }
 
     private void attemptCadastro() {
+        String ip = ipField.getText();
+        String portaStr = portaField.getText();
         try {
+            int porta = Integer.parseInt(portaStr);
             Cliente cliente = Cliente.getInstance();
             if (!cliente.isConnected()) {
-                cliente.startConnection("127.0.0.1", 12345); // Conexão padrão
+                cliente.startConnection(ip, porta);
             }
-            cliente.setCadastroFrame(this); // <-- Esta linha agora funciona
+            cliente.setCadastroFrame(this);
 
             Map<String, String> request = new HashMap<>();
             request.put("operacao", "usuario_criar");
@@ -71,6 +84,8 @@ public class CadastroFrame extends JFrame {
 
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(this, "Erro de conexão: " + ex.getMessage());
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Porta inválida.", "Erro", JOptionPane.ERROR_MESSAGE);
         }
     }
 
