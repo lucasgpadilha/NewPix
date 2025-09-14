@@ -184,7 +184,7 @@ public class AuthenticationFrame extends JFrame {
 
     public void handleServerResponse(String jsonResponse) {
         Map<String, Object> response = JsonController.fromJson(jsonResponse, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-        boolean status = (boolean) response.get("status");
+        boolean status = (boolean) response.getOrDefault("status", false); // <-- CORREÇÃO AQUI
         String info = (String) response.get("info");
 
         if (status) {
