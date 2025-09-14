@@ -65,7 +65,7 @@ public class AuthenticationFrame extends JFrame {
         gbc.gridx = 1; ipField = new JTextField("127.0.0.1", 15); panel.add(ipField, gbc);
 
         gbc.gridy = 6; gbc.gridx = 0; panel.add(new JLabel("Porta:"), gbc);
-        gbc.gridx = 1; portaField = new JTextField("12345", 15); panel.add(portaField, gbc);
+        gbc.gridx = 1; portaField = new JTextField("20000", 15); panel.add(portaField, gbc);
 
         // --- Botões de Ação ---
         mainActionButton = new JButton("Login");

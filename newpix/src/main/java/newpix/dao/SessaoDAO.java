@@ -1,9 +1,7 @@
 package newpix.dao;
 
 import newpix.configs.DatabaseConfig;
-import newpix.models.Sessao;
 import newpix.models.Usuario;
-
 import java.sql.*;
 import java.util.UUID;
 
@@ -46,6 +44,15 @@ public class SessaoDAO {
         try (Connection conn = DatabaseConfig.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, token);
+            stmt.executeUpdate();
+        }
+    }
+    
+    public void deletarSessoesPorUsuario(int usuarioId) throws SQLException {
+        String sql = "DELETE FROM sessoes WHERE usuario_id = ?";
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, usuarioId);
             stmt.executeUpdate();
         }
     }

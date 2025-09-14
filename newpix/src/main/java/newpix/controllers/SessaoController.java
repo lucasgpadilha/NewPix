@@ -18,4 +18,8 @@ public class SessaoController {
     public void deletarSessao(String token) throws SQLException {
         sessaoDAO.deletarSessao(token);
     }
+
+    public void deletarSessoesPorUsuario(int usuarioId) throws SQLException {
+        sessaoDAO.deletarSessoesPorUsuario(usuarioId);
+    }
 }

@@ -62,4 +62,54 @@ public class UsuarioDAO {
         }
         return null;
     }
+
+    public Usuario getPorId(int id) throws SQLException {
+        String sql = "SELECT * FROM usuarios WHERE id = ?";
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, id);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return new Usuario(
+                            rs.getInt("id"),
+                            rs.getString("nome"),
+                            rs.getString("cpf"),
+                            rs.getString("senha"),
+                            rs.getDouble("saldo")
+                    );
+                }
+            }
+        }
+        return null;
+    }
+
+    public void atualizar(Usuario usuario) throws SQLException {
+        String sql = "UPDATE usuarios SET nome = ?, senha = ? WHERE id = ?";
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, usuario.getNome());
+            stmt.setString(2, usuario.getSenha());
+            stmt.setInt(3, usuario.getId());
+            stmt.executeUpdate();
+        }
+    }
+
+    public void deletar(int id) throws SQLException {
+        String sql = "DELETE FROM usuarios WHERE id = ?";
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, id);
+            stmt.executeUpdate();
+        }
+    }
+
+    public void atualizarSaldo(int usuarioId, double valor) throws SQLException {
+        String sql = "UPDATE usuarios SET saldo = saldo + ? WHERE id = ?";
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setDouble(1, valor);
+            stmt.setInt(2, usuarioId);
+            stmt.executeUpdate();
+        }
+    }
 }
