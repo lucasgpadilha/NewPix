@@ -16,7 +16,8 @@ public class TransacaoController {
     private final TransacaoDAO transacaoDAO = new TransacaoDAO();
     private final UsuarioDAO usuarioDAO = new UsuarioDAO();
 
-    public void realizarTransferencia(int idRemetente, String cpfDestino, double valor) throws SQLException {
+    // --- MUDANÇA: Retorna o usuário destinatário atualizado ---
+    public Usuario realizarTransferencia(int idRemetente, String cpfDestino, double valor) throws SQLException {
         if (valor <= 0) {
             throw new SQLException("O valor da transferência deve ser positivo.");
         }
@@ -39,10 +40,12 @@ public class TransacaoController {
 
         // A transação é feita de forma atômica no DAO
         transacaoDAO.criarTransacao(remetente, destinatario, valor);
+        
+        // --- NOVO: Retorna o usuário destinatário com o saldo já atualizado pelo DAO ---
+        return usuarioDAO.getPorCpf(cpfDestino);
     }
 
     public List<Map<String, Object>> buscarExtrato(int usuarioId, String dataInicialStr, String dataFinalStr) throws Exception {
-        // CORREÇÃO AQUI: Usar ZonedDateTime para interpretar a data/hora completa com fuso horário (Z = UTC)
         DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
 
         try {

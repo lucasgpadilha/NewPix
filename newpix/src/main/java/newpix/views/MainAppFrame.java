@@ -29,7 +29,6 @@ public class MainAppFrame extends JFrame {
     private JTextField novoNomeField;
     private JPasswordField novaSenhaField;
 
-    // --- Componentes do novo painel de extrato ---
     private JSpinner dataInicialSpinner;
     private JSpinner dataFinalSpinner;
 
@@ -84,15 +83,31 @@ public class MainAppFrame extends JFrame {
         JPanel panel = new JPanel(new BorderLayout(10, 10));
         panel.setBorder(new EmptyBorder(20, 20, 20, 20));
 
+        // --- PAINEL SUPERIOR ---
         JPanel topPanel = new JPanel();
         topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.Y_AXIS));
         welcomeLabel.setFont(new Font("SansSerif", Font.BOLD, 28));
+        
+        // --- NOVO: Container para Saldo e Botão de Atualizar ---
+        JPanel balancePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        balancePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         balanceLabel.setFont(new Font("SansSerif", Font.PLAIN, 22));
+        balancePanel.add(balanceLabel);
+
+        // Adiciona um pequeno espaço
+        balancePanel.add(Box.createRigidArea(new Dimension(10, 0)));
+
+        // Cria o botão de atualizar
+        JButton refreshButton = new JButton("Atualizar Saldo");
+        refreshButton.addActionListener(e -> loadUserData());
+        balancePanel.add(refreshButton);
+        
         topPanel.add(welcomeLabel);
         topPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        topPanel.add(balanceLabel);
+        topPanel.add(balancePanel); // Adiciona o painel com saldo e botão
         panel.add(topPanel, BorderLayout.NORTH);
 
+        // --- PAINEL CENTRAL ---
         JPanel centerPanel = new JPanel(new GridLayout(2, 2, 20, 20));
         centerPanel.setBorder(new EmptyBorder(40, 20, 40, 20));
         JButton pixButton = new JButton("Fazer um Pix");
@@ -112,15 +127,17 @@ public class MainAppFrame extends JFrame {
         centerPanel.add(meusDadosButton);
         panel.add(centerPanel, BorderLayout.CENTER);
 
+        // --- PAINEL INFERIOR ---
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         JButton logoutButton = new JButton("Logout");
         bottomPanel.add(logoutButton);
         panel.add(bottomPanel, BorderLayout.SOUTH);
 
+        // --- AÇÕES DOS BOTÕES ---
         pixButton.addActionListener(e -> cardLayout.show(mainPanel, "PIX"));
         extratoButton.addActionListener(e -> {
             cardLayout.show(mainPanel, "EXTRATO");
-            buscarExtrato(); // Busca o extrato com as datas padrão ao abrir a tela
+            buscarExtrato();
         });
         depositoButton.addActionListener(e -> cardLayout.show(mainPanel, "DEPOSITO"));
         meusDadosButton.addActionListener(e -> cardLayout.show(mainPanel, "MEUS_DADOS"));
@@ -169,24 +186,18 @@ public class MainAppFrame extends JFrame {
         JPanel topContainer = new JPanel(new BorderLayout());
         topContainer.add(createHeader("Meu Extrato"), BorderLayout.NORTH);
 
-        // --- PAINEL DE CONTROLES COM SELETORES DE DATA ---
         JPanel controlsPanel = new JPanel(new FlowLayout());
         controlsPanel.add(new JLabel("De:"));
 
-        // Configura a data final (hoje)
         Date hoje = new Date();
-
-        // Configura a data inicial (31 dias atrás)
         Calendar cal = Calendar.getInstance();
         cal.setTime(hoje);
         cal.add(Calendar.DAY_OF_MONTH, -31);
         Date dataInicialDefault = cal.getTime();
 
-        // Cria os spinners com os valores padrão
         dataInicialSpinner = new JSpinner(new SpinnerDateModel(dataInicialDefault, null, hoje, Calendar.DAY_OF_MONTH));
         dataFinalSpinner = new JSpinner(new SpinnerDateModel(hoje, null, hoje, Calendar.DAY_OF_MONTH));
 
-        // Define o formato de exibição da data
         dataInicialSpinner.setEditor(new JSpinner.DateEditor(dataInicialSpinner, "dd/MM/yyyy"));
         dataFinalSpinner.setEditor(new JSpinner.DateEditor(dataFinalSpinner, "dd/MM/yyyy"));
         
@@ -266,7 +277,7 @@ public class MainAppFrame extends JFrame {
         return panel;
     }
 
-    private void loadUserData() {
+    public void loadUserData() {
         Cliente cliente = Cliente.getInstance();
         if (cliente.getToken() == null) {
             JOptionPane.showMessageDialog(this, "Erro: Token de sessão não encontrado. Faça o login novamente.", "Erro", JOptionPane.ERROR_MESSAGE);
@@ -316,11 +327,9 @@ public class MainAppFrame extends JFrame {
     }
 
     private void buscarExtrato() {
-        // Pega as datas dos JSpinners
         Date dataInicialDate = (Date) dataInicialSpinner.getValue();
         Date dataFinalDate = (Date) dataFinalSpinner.getValue();
 
-        // Formata as datas para o padrão ISO 8601 UTC (yyyy-MM-dd'T'HH:mm:ss'Z')
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
         sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
         
@@ -413,8 +422,20 @@ public class MainAppFrame extends JFrame {
                     this.dispose();
                     new AuthenticationFrame().setVisible(true);
                     break;
+                case "notificacao_pix_recebido":
+                    handlePixRecebido(response);
+                    break;
             }
         });
+    }
+    
+    private void handlePixRecebido(Map<String, Object> response) {
+        String info = (String) response.get("info");
+        double novoSaldo = ((Number) response.get("novo_saldo")).doubleValue();
+        
+        JOptionPane.showMessageDialog(this, info, "PIX Recebido!", JOptionPane.INFORMATION_MESSAGE);
+        
+        balanceLabel.setText(String.format("Saldo: R$ %.2f", novoSaldo));
     }
     
     private void handleUsuarioLerResponse(Map<String, Object> response) {
@@ -424,6 +445,9 @@ public class MainAppFrame extends JFrame {
             Map<String, Object> usuario = (Map<String, Object>) response.get("usuario");
             welcomeLabel.setText("Bem-vindo(a), " + usuario.get("nome") + "!");
             balanceLabel.setText(String.format("Saldo: R$ %.2f", (Double) usuario.get("saldo")));
+            
+            // --- NOVO: Feedback visual para o usuário ---
+            JOptionPane.showMessageDialog(this, "Saldo atualizado com sucesso!", "Informação", JOptionPane.INFORMATION_MESSAGE);
         } else {
             JOptionPane.showMessageDialog(this, "Erro ao carregar dados: " + response.get("info"), "Erro", JOptionPane.ERROR_MESSAGE);
             performLogout();

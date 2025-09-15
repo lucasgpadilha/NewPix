@@ -29,6 +29,9 @@ public class Servidor {
     private final UsuarioController usuarioController = new UsuarioController();
     private final SessaoController sessaoController = new SessaoController();
     private final TransacaoController transacaoController = new TransacaoController();
+    
+    // --- NOVO: Mapa para rastrear clientes ativos pelo CPF ---
+    private final Map<String, ClientHandler> activeClientsByCpf = new ConcurrentHashMap<>();
 
     public static class ClientInfo {
         public final String ip;
@@ -76,7 +79,7 @@ public class Servidor {
             System.out.println(logMsg);
             serverFrame.addLog(logMsg);
             while (true) {
-                new ClientHandler(serverSocket.accept(), serverFrame, this).start();
+                new ClientHandler(serverSocket.accept(), this).start();
             }
         } catch (IOException e) {
             String errorMsg = getTimestamp() + " ERRO ao iniciar o servidor: " + e.getMessage();
@@ -87,17 +90,26 @@ public class Servidor {
 
     private class ClientHandler extends Thread {
         private final Socket clientSocket;
-        private final ServerFrame serverFrame;
         private final Servidor servidor;
         private PrintWriter out;
         private BufferedReader in;
         private final ClientInfo clientInfo;
+        private String loggedInCpf = null; // CPF do usuário logado nesta thread
 
-        public ClientHandler(Socket socket, ServerFrame serverFrame, Servidor servidor) {
+        public ClientHandler(Socket socket, Servidor servidor) {
             this.clientSocket = socket;
-            this.serverFrame = serverFrame;
             this.servidor = servidor;
             this.clientInfo = new ClientInfo(socket.getInetAddress().getHostAddress(), socket.getPort());
+        }
+        
+        // --- NOVO: Método para enviar mensagens a este cliente específico ---
+        public void sendMessage(String message) {
+            if (out != null && !clientSocket.isClosed()) {
+                out.println(message);
+                String sentMsg = getTimestamp() + " [NOTIFICAÇÃO ENVIADA] Para " + clientInfo.ip + ":" + clientInfo.port + ": " + message;
+                System.out.println(sentMsg);
+                serverFrame.addLog(sentMsg);
+            }
         }
 
         public void run() {
@@ -125,6 +137,10 @@ public class Servidor {
             } catch (IOException e) {
                 // Silencioso
             } finally {
+                // --- NOVO: Remover cliente do mapa de ativos ao desconectar ---
+                if (loggedInCpf != null) {
+                    servidor.activeClientsByCpf.remove(loggedInCpf);
+                }
                 serverFrame.removeClient(clientInfo);
                 String disconnectMsg = getTimestamp() + " [DESCONEXÃO] Cliente desconectado: " + clientInfo.ip + ":" + clientInfo.port;
                 System.out.println(disconnectMsg);
@@ -199,6 +215,10 @@ public class Servidor {
                     responseMap.put("info", "Login bem-sucedido.");
                     responseMap.put("token", token);
                     serverFrame.updateClientCpf(this.clientInfo, cpf);
+                    
+                    // --- NOVO: Adiciona o cliente ao mapa de ativos ---
+                    this.loggedInCpf = cpf;
+                    servidor.activeClientsByCpf.put(cpf, this);
                 } else {
                     responseMap.put("status", false);
                     responseMap.put("info", "CPF ou senha inválidos.");
@@ -216,6 +236,12 @@ public class Servidor {
                 responseMap.put("status", true);
                 responseMap.put("info", "Logout realizado com sucesso.");
                 serverFrame.updateClientCpf(this.clientInfo, "Não logado");
+
+                // --- NOVO: Remove o cliente do mapa de ativos ---
+                if (loggedInCpf != null) {
+                    servidor.activeClientsByCpf.remove(loggedInCpf);
+                    loggedInCpf = null;
+                }
             } catch (Exception e) {
                 responseMap.put("status", false);
                 responseMap.put("info", "Erro ao realizar logout: " + e.getMessage());
@@ -360,10 +386,23 @@ public class Servidor {
                     return;
                 }
                 
-                servidor.transacaoController.realizarTransferencia(remetente.getId(), cpfDestino, valor);
+                // Realiza a transferência
+                Usuario destinatario = servidor.transacaoController.realizarTransferencia(remetente.getId(), cpfDestino, valor);
                 
                 responseMap.put("status", true);
                 responseMap.put("info", "Transferência PIX realizada com sucesso!");
+
+                // --- NOVO: Lógica de notificação ---
+                ClientHandler destinatarioHandler = servidor.activeClientsByCpf.get(cpfDestino);
+                if (destinatarioHandler != null) {
+                    Map<String, Object> notificacaoMap = new ConcurrentHashMap<>();
+                    notificacaoMap.put("operacao", "notificacao_pix_recebido");
+                    notificacaoMap.put("info", String.format("Você recebeu um PIX de R$ %.2f de %s.", valor, remetente.getNome()));
+                    notificacaoMap.put("novo_saldo", destinatario.getSaldo()); // O saldo já foi atualizado no BD
+                    
+                    destinatarioHandler.sendMessage(JsonController.toJson(notificacaoMap));
+                }
+                // --- FIM da lógica de notificação ---
 
             } catch (SQLException e) {
                 responseMap.put("status", false);
