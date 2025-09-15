@@ -4,6 +4,7 @@ import newpix.dao.TransacaoDAO;
 import newpix.dao.UsuarioDAO;
 import newpix.models.Usuario;
 
+import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -16,8 +17,12 @@ public class TransacaoController {
     private final TransacaoDAO transacaoDAO = new TransacaoDAO();
     private final UsuarioDAO usuarioDAO = new UsuarioDAO();
 
-    // --- MUDANÇA: Retorna o usuário destinatário atualizado ---
     public Usuario realizarTransferencia(int idRemetente, String cpfDestino, double valor) throws SQLException {
+        // --- CORREÇÃO: Validação estrita de duas casas decimais ---
+        if (BigDecimal.valueOf(valor).scale() > 2) {
+            throw new SQLException("O valor da transferência não pode ter mais que duas casas decimais.");
+        }
+        
         if (valor <= 0) {
             throw new SQLException("O valor da transferência deve ser positivo.");
         }
@@ -38,10 +43,8 @@ public class TransacaoController {
             throw new SQLException("Saldo insuficiente para realizar a transferência.");
         }
 
-        // A transação é feita de forma atômica no DAO
         transacaoDAO.criarTransacao(remetente, destinatario, valor);
         
-        // --- NOVO: Retorna o usuário destinatário com o saldo já atualizado pelo DAO ---
         return usuarioDAO.getPorCpf(cpfDestino);
     }
 

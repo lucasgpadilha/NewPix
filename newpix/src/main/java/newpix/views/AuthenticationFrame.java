@@ -4,127 +4,185 @@ import newpix.Cliente;
 import newpix.controllers.JsonController;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
+import javax.swing.border.MatteBorder;
+import javax.swing.border.TitledBorder;
+import javax.swing.text.JTextComponent;
 import javax.swing.text.MaskFormatter;
 import java.awt.*;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
 public class AuthenticationFrame extends JFrame {
+    private static final Color ROXO_PRINCIPAL = new Color(95, 49, 230);
+    private static final Color CINZA_FUNDO_PAINEL = new Color(245, 245, 245);
+    private static final Color CINZA_BORDA = new Color(220, 220, 220);
+    private static final Font CAMPO_FONT = new Font("SansSerif", Font.PLAIN, 16);
+    private static final Font BOTAO_PRINCIPAL_FONT = new Font("SansSerif", Font.BOLD, 16);
+    private static final Font LABEL_FONT = new Font("SansSerif", Font.BOLD, 14);
+
     private final JTextField ipField, portaField, nomeField;
-    private final JFormattedTextField cpfField; // Alterado para JFormattedTextField
+    private JFormattedTextField cpfField;
     private final JPasswordField senhaField, confirmaSenhaField;
-    private final JLabel nomeLabel, confirmaSenhaLabel;
+    private final JLabel nomeLabel, confirmaSenhaLabel, senhaLabel;
     private final JButton mainActionButton;
     private final JButton switchModeButton;
+    private final JLabel titleLabel;
 
     private boolean isRegistrationMode = false;
 
     public AuthenticationFrame() {
-        setTitle("NewPix - Login");
+        setTitle("NewPix");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
-        // --- Painel Principal ---
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        mainPanel.setBackground(CINZA_FUNDO_PAINEL);
+
+        JPanel formWrapper = new JPanel(new GridBagLayout());
+        formWrapper.setBackground(CINZA_FUNDO_PAINEL);
+
+        JPanel formPanel = new JPanel(new GridBagLayout());
+        formPanel.setBackground(Color.WHITE);
+        formPanel.setBorder(new EmptyBorder(30, 30, 30, 30));
+        
+        GridBagConstraints gbcWrapper = new GridBagConstraints();
+        gbcWrapper.insets = new Insets(20,20,20,20);
+        formWrapper.add(formPanel, gbcWrapper);
+        mainPanel.add(formWrapper, BorderLayout.CENTER);
+
+
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.insets = new Insets(8, 5, 8, 5);
         gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+        
+        titleLabel = new JLabel("Bem-vindo ao NewPix");
+        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 24));
+        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        gbc.gridwidth = 2;
+        gbc.insets = new Insets(8, 5, 20, 5);
+        formPanel.add(titleLabel, gbc);
+        gbc.insets = new Insets(8, 5, 8, 5);
+        gbc.gridwidth = 1;
 
-        // --- Campo de CPF com Máscara ---
-        JFormattedTextField tempCpfField;
+        gbc.gridy = 1; formPanel.add(createLabel("CPF"), gbc);
+        
+        gbc.gridy = 2;
         try {
             MaskFormatter cpfFormatter = new MaskFormatter("###.###.###-##");
-            tempCpfField = new JFormattedTextField(cpfFormatter);
+            cpfFormatter.setPlaceholderCharacter(' ');
+            cpfField = new JFormattedTextField(cpfFormatter);
         } catch (java.text.ParseException e) {
-            // Em caso de erro na máscara, usa um campo de texto normal como fallback
             e.printStackTrace();
-            tempCpfField = new JFormattedTextField();
+            cpfField = new JFormattedTextField();
         }
-        cpfField = tempCpfField;
-        cpfField.setColumns(15);
+        styleTextField(cpfField);
+        MainAppFrame.PlaceholderUtil.addPlaceholder(cpfField, "000.000.000-00");
+        formPanel.add(cpfField, gbc);
 
-        // --- Campos de Autenticação ---
-        gbc.gridx = 0; gbc.gridy = 0; panel.add(new JLabel("CPF:"), gbc);
-        gbc.gridx = 1; gbc.gridy = 0; panel.add(cpfField, gbc);
+        gbc.gridy = 3; nomeLabel = createLabel("Nome Completo"); formPanel.add(nomeLabel, gbc);
+        gbc.gridy = 4; nomeField = new JTextField(); styleTextField(nomeField); formPanel.add(nomeField, gbc);
+        MainAppFrame.PlaceholderUtil.addPlaceholder(nomeField, "Seu nome completo");
 
-        gbc.gridx = 0; gbc.gridy = 1; nomeLabel = new JLabel("Nome Completo:"); panel.add(nomeLabel, gbc);
-        gbc.gridx = 1; gbc.gridy = 1; nomeField = new JTextField(15); panel.add(nomeField, gbc);
+        gbc.gridy = 5; senhaLabel = createLabel("Senha"); formPanel.add(senhaLabel, gbc);
+        gbc.gridy = 6; senhaField = new JPasswordField(); styleTextField(senhaField); formPanel.add(senhaField, gbc);
+        MainAppFrame.PlaceholderUtil.addPlaceholder(senhaField, "••••••");
 
-        gbc.gridx = 0; gbc.gridy = 2; panel.add(new JLabel("Senha (mín. 8 caracteres):"), gbc);
-        gbc.gridx = 1; gbc.gridy = 2; senhaField = new JPasswordField(15); panel.add(senhaField, gbc);
+        gbc.gridy = 7; confirmaSenhaLabel = createLabel("Confirmar Senha"); formPanel.add(confirmaSenhaLabel, gbc);
+        gbc.gridy = 8; confirmaSenhaField = new JPasswordField(); styleTextField(confirmaSenhaField); formPanel.add(confirmaSenhaField, gbc);
+        MainAppFrame.PlaceholderUtil.addPlaceholder(confirmaSenhaField, "••••••");
 
-        gbc.gridx = 0; gbc.gridy = 3; confirmaSenhaLabel = new JLabel("Confirmar Senha:"); panel.add(confirmaSenhaLabel, gbc);
-        gbc.gridx = 1; gbc.gridy = 3; confirmaSenhaField = new JPasswordField(15); panel.add(confirmaSenhaField, gbc);
+        gbc.gridy = 9;
+        gbc.insets = new Insets(20, 5, 8, 5);
+        mainActionButton = createPrimaryButton("Login");
+        formPanel.add(mainActionButton, gbc);
 
-        // --- Separador ---
-        gbc.gridy = 4; gbc.gridwidth = 2; panel.add(new JSeparator(), gbc);
-
-        // --- Campos de Conexão ---
-        gbc.gridy = 5; gbc.gridwidth = 1; gbc.gridx = 0; panel.add(new JLabel("IP Servidor:"), gbc);
-        gbc.gridx = 1; ipField = new JTextField("127.0.0.1", 15); panel.add(ipField, gbc);
-
-        gbc.gridy = 6; gbc.gridx = 0; panel.add(new JLabel("Porta:"), gbc);
-        gbc.gridx = 1; portaField = new JTextField("20000", 15); panel.add(portaField, gbc);
-
-        // --- Botões de Ação ---
-        mainActionButton = new JButton("Login");
+        gbc.gridy = 10;
+        gbc.insets = new Insets(0, 5, 8, 5);
         switchModeButton = new JButton("Não tem uma conta? Cadastre-se");
-        switchModeButton.setBorderPainted(false);
-        switchModeButton.setContentAreaFilled(false);
-        switchModeButton.setForeground(Color.BLUE);
+        switchModeButton.putClientProperty("JButton.buttonType", "borderless");
+        switchModeButton.setForeground(ROXO_PRINCIPAL);
         switchModeButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        formPanel.add(switchModeButton, gbc);
+        
+        // --- MUDANÇA: Painel de conexão com título ---
+        JPanel connectionPanel = new JPanel(new GridBagLayout());
+        connectionPanel.setBorder(BorderFactory.createTitledBorder(
+            new EmptyBorder(10, 10, 10, 10),
+            "Endereço do servidor",
+            TitledBorder.LEFT,
+            TitledBorder.TOP,
+            LABEL_FONT,
+            Color.DARK_GRAY
+        ));
+        connectionPanel.setBackground(CINZA_FUNDO_PAINEL);
 
-        gbc.gridy = 7; gbc.gridx = 0; gbc.gridwidth = 2; panel.add(mainActionButton, gbc);
-        gbc.gridy = 8; panel.add(switchModeButton, gbc);
+        GridBagConstraints gbcConn = new GridBagConstraints();
+        gbcConn.insets = new Insets(5, 5, 5, 5);
+        gbcConn.fill = GridBagConstraints.HORIZONTAL;
+        gbcConn.weightx = 1.0;
 
-        // --- Listeners ---
+        gbcConn.gridx = 0; gbcConn.gridy = 0; gbcConn.weightx = 0; connectionPanel.add(new JLabel("IP:"), gbcConn);
+        gbcConn.gridx = 1; gbcConn.gridy = 0; gbcConn.weightx = 1; ipField = new JTextField("127.0.0.1", 15); styleTextField(ipField); connectionPanel.add(ipField, gbcConn);
+
+        gbcConn.gridx = 0; gbcConn.gridy = 1; gbcConn.weightx = 0; connectionPanel.add(new JLabel("Porta:"), gbcConn);
+        gbcConn.gridx = 1; gbcConn.gridy = 1; gbcConn.weightx = 1; portaField = new JTextField("20000", 15); styleTextField(portaField); connectionPanel.add(portaField, gbcConn);
+        
+        mainPanel.add(connectionPanel, BorderLayout.SOUTH);
+
         mainActionButton.addActionListener(e -> performMainAction());
         switchModeButton.addActionListener(e -> toggleMode());
 
-        // --- Estado Inicial (Modo Login) ---
-        nomeLabel.setVisible(false);
-        nomeField.setVisible(false);
-        confirmaSenhaLabel.setVisible(false);
-        confirmaSenhaField.setVisible(false);
+        toggleMode();
+        toggleMode();
 
-        add(panel);
+        add(mainPanel);
         pack();
+        setMinimumSize(getSize());
         setLocationRelativeTo(null);
     }
 
     private void toggleMode() {
         isRegistrationMode = !isRegistrationMode;
         if (isRegistrationMode) {
-            // Mudar para o modo de Cadastro
-            setTitle("NewPix - Cadastro");
+            titleLabel.setText("Crie sua conta");
             nomeLabel.setVisible(true);
             nomeField.setVisible(true);
+            senhaLabel.setText("Senha (mín. 6 caracteres)");
             confirmaSenhaLabel.setVisible(true);
             confirmaSenhaField.setVisible(true);
             mainActionButton.setText("Confirmar Cadastro");
             switchModeButton.setText("Já tem uma conta? Entrar");
         } else {
-            // Mudar para o modo de Login
-            setTitle("NewPix - Login");
+            titleLabel.setText("Bem-vindo ao NewPix");
             nomeLabel.setVisible(false);
             nomeField.setVisible(false);
+            senhaLabel.setText("Senha");
             confirmaSenhaLabel.setVisible(false);
             confirmaSenhaField.setVisible(false);
             mainActionButton.setText("Login");
             switchModeButton.setText("Não tem uma conta? Cadastre-se");
         }
-        pack(); // Reajusta o tamanho da janela
+        pack();
+        setLocationRelativeTo(null);
     }
 
     private void performMainAction() {
-        // Validações client-side antes de tentar a conexão
         if (isRegistrationMode) {
             String senha = new String(senhaField.getPassword());
             String confirmaSenha = new String(confirmaSenhaField.getPassword());
 
-            if (senha.length() < 8) {
-                JOptionPane.showMessageDialog(this, "A senha deve ter no mínimo 8 caracteres.", "Erro de Validação", JOptionPane.ERROR_MESSAGE);
+            if (senha.length() < 6) {
+                JOptionPane.showMessageDialog(this, "A senha deve ter no mínimo 6 caracteres.", "Erro de Validação", JOptionPane.ERROR_MESSAGE);
                 return;
             }
             if (!senha.equals(confirmaSenha)) {
@@ -153,20 +211,18 @@ public class AuthenticationFrame extends JFrame {
             mainActionButton.setEnabled(false);
             mainActionButton.setText("Aguardando...");
 
+            Map<String, String> request = new HashMap<>();
             if (isRegistrationMode) {
-                Map<String, String> request = new HashMap<>();
                 request.put("operacao", "usuario_criar");
                 request.put("nome", nomeField.getText());
                 request.put("cpf", cpfField.getText());
                 request.put("senha", new String(senhaField.getPassword()));
-                cliente.sendMessage(JsonController.toJson(request));
             } else {
-                Map<String, String> request = new HashMap<>();
                 request.put("operacao", "usuario_login");
                 request.put("cpf", cpfField.getText());
                 request.put("senha", new String(senhaField.getPassword()));
-                cliente.sendMessage(JsonController.toJson(request));
             }
+            cliente.sendMessage(JsonController.toJson(request));
 
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(this, "Erro de conexão: " + ex.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
@@ -184,28 +240,55 @@ public class AuthenticationFrame extends JFrame {
 
     public void handleServerResponse(String jsonResponse) {
         Map<String, Object> response = JsonController.fromJson(jsonResponse, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-        boolean status = (boolean) response.getOrDefault("status", false); // <-- CORREÇÃO AQUI
+        boolean status = (boolean) response.getOrDefault("status", false);
         String info = (String) response.get("info");
 
         if (status) {
-            JOptionPane.showMessageDialog(this, info, "Sucesso", JOptionPane.INFORMATION_MESSAGE);
-            if (isRegistrationMode) {
-                toggleMode();
-                // Limpa os campos após o cadastro bem-sucedido
-                cpfField.setValue(null);
-                nomeField.setText("");
-                senhaField.setText("");
-                confirmaSenhaField.setText("");
-            } else {
+            if (!isRegistrationMode) {
                 Cliente.getInstance().setToken((String) response.get("token"));
                 MainAppFrame mainApp = new MainAppFrame();
                 mainApp.setVisible(true);
                 this.dispose();
+                return;
             }
+            
+            JOptionPane.showMessageDialog(this, info, "Sucesso", JOptionPane.INFORMATION_MESSAGE);
+            toggleMode();
+            cpfField.setValue(null);
+            nomeField.setText("");
+            senhaField.setText("");
+            confirmaSenhaField.setText("");
+
         } else {
             JOptionPane.showMessageDialog(this, info, "Falha na Operação", JOptionPane.ERROR_MESSAGE);
         }
         
         resetButton();
+    }
+    
+    private JLabel createLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(LABEL_FONT);
+        return label;
+    }
+    
+    private JButton createPrimaryButton(String text) {
+        JButton button = new JButton(text);
+        button.setFont(BOTAO_PRINCIPAL_FONT);
+        button.setBackground(ROXO_PRINCIPAL);
+        button.setForeground(Color.WHITE);
+        button.setOpaque(true);
+        button.setBorderPainted(false);
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setPreferredSize(new Dimension(100, 45));
+        return button;
+    }
+
+    private void styleTextField(JComponent field) {
+        field.setFont(CAMPO_FONT);
+        field.setBorder(BorderFactory.createCompoundBorder(
+            new MatteBorder(1, 1, 1, 1, CINZA_BORDA),
+            new EmptyBorder(10, 10, 10, 10)
+        ));
     }
 }

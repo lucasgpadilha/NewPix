@@ -10,8 +10,11 @@ public class ServidorMain {
             try {
                 int port = Integer.parseInt(portStr);
                 ServerFrame serverFrame = new ServerFrame();
+                
+                serverFrame.setPort(port);
+                
                 serverFrame.setVisible(true);
-                // Inicia o servidor em uma nova thread para não bloquear a GUI
+                
                 new Thread(() -> {
                     Servidor servidor = new Servidor(serverFrame);
                     servidor.start(port);

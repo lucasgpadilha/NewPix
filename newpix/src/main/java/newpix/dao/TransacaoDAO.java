@@ -16,29 +16,25 @@ public class TransacaoDAO {
     public void criarTransacao(Usuario remetente, Usuario destinatario, double valor) throws SQLException {
         String sqlUpdateRemetente = "UPDATE usuarios SET saldo = saldo - ? WHERE id = ?";
         String sqlUpdateDestinatario = "UPDATE usuarios SET saldo = saldo + ? WHERE id = ?";
-        // CORREÇÃO AQUI: Nomes das colunas ajustados para id_remetente e id_destinatario
         String sqlInsertTransacao = "INSERT INTO transacoes (id_remetente, id_destinatario, valor) VALUES (?, ?, ?)";
         Connection conn = null;
 
         try {
             conn = DatabaseConfig.getConnection();
-            conn.setAutoCommit(false); // Inicia a transação
+            conn.setAutoCommit(false); 
 
-            // Debita da conta do remetente
             try (PreparedStatement stmt = conn.prepareStatement(sqlUpdateRemetente)) {
                 stmt.setDouble(1, valor);
                 stmt.setInt(2, remetente.getId());
                 stmt.executeUpdate();
             }
 
-            // Credita na conta do destinatário
             try (PreparedStatement stmt = conn.prepareStatement(sqlUpdateDestinatario)) {
                 stmt.setDouble(1, valor);
                 stmt.setInt(2, destinatario.getId());
                 stmt.executeUpdate();
             }
 
-            // Registra a transação
             try (PreparedStatement stmt = conn.prepareStatement(sqlInsertTransacao)) {
                 stmt.setInt(1, remetente.getId());
                 stmt.setInt(2, destinatario.getId());
@@ -46,18 +42,17 @@ public class TransacaoDAO {
                 stmt.executeUpdate();
             }
 
-            conn.commit(); // Efetiva a transação
+            conn.commit();
 
         } catch (SQLException e) {
             if (conn != null) {
                 try {
-                    conn.rollback(); // Desfaz tudo em caso de erro
+                    conn.rollback();
                 } catch (SQLException ex) {
                     ex.printStackTrace();
                 }
             }
-            // Lançar a exceção original para o controller poder tratá-la
-            throw e; 
+            throw e;
         } finally {
             if (conn != null) {
                 try {
@@ -72,10 +67,11 @@ public class TransacaoDAO {
 
     public List<Map<String, Object>> getExtratoPorPeriodo(int usuarioId, String dataInicial, String dataFinal) throws SQLException {
         List<Map<String, Object>> extrato = new ArrayList<>();
-        // CORREÇÃO AQUI: Simplificado e adicionado o campo "tipo" e "outro_participante"
-        String sql = "SELECT t.valor, t.data, " +
-                     "CASE WHEN t.id_remetente = ? THEN 'enviada' ELSE 'recebida' END as tipo, " +
-                     "CASE WHEN t.id_remetente = ? THEN dest.nome ELSE rem.nome END as outro_participante " +
+        // CORREÇÃO: Query para buscar todos os dados necessários para o formato do protocolo
+        String sql = "SELECT t.id, t.valor, t.data, " +
+                     "rem.nome as remetente_nome, rem.cpf as remetente_cpf, " +
+                     "dest.nome as destinatario_nome, dest.cpf as destinatario_cpf, " +
+                     "t.id_remetente " +
                      "FROM transacoes t " +
                      "JOIN usuarios rem ON t.id_remetente = rem.id " +
                      "JOIN usuarios dest ON t.id_destinatario = dest.id " +
@@ -87,23 +83,37 @@ public class TransacaoDAO {
             
             stmt.setInt(1, usuarioId);
             stmt.setInt(2, usuarioId);
-            stmt.setInt(3, usuarioId);
-            stmt.setInt(4, usuarioId);
-            stmt.setString(5, dataInicial);
-            stmt.setString(6, dataFinal);
+            stmt.setString(3, dataInicial);
+            stmt.setString(4, dataFinal);
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
+                    // CORREÇÃO: Montagem do mapa no formato exato do protocolo
                     Map<String, Object> transacao = new HashMap<>();
-                    transacao.put("valor", rs.getDouble("valor"));
+                    transacao.put("id", rs.getInt("id"));
+                    transacao.put("valor_enviado", rs.getDouble("valor"));
+
+                    Map<String, String> enviador = new HashMap<>();
+                    enviador.put("nome", rs.getString("remetente_nome"));
+                    enviador.put("cpf", rs.getString("remetente_cpf"));
+                    transacao.put("usuario_enviador", enviador);
+
+                    Map<String, String> recebedor = new HashMap<>();
+                    recebedor.put("nome", rs.getString("destinatario_nome"));
+                    recebedor.put("cpf", rs.getString("destinatario_cpf"));
+                    transacao.put("usuario_recebedor", recebedor);
                     
                     Timestamp timestamp = rs.getTimestamp("data");
                     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
                     sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
-                    transacao.put("data", sdf.format(timestamp));
+                    String dataFormatada = sdf.format(timestamp);
 
-                    transacao.put("tipo", rs.getString("tipo"));
-                    transacao.put("outro_participante", rs.getString("outro_participante"));
+                    transacao.put("criado_em", dataFormatada);
+                    transacao.put("atualizado_em", dataFormatada);
+                    
+                    // Adiciona um campo extra para facilitar a vida do front-end
+                    transacao.put("tipo", rs.getInt("id_remetente") == usuarioId ? "enviada" : "recebida");
+
                     extrato.add(transacao);
                 }
             }

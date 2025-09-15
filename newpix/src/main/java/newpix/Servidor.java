@@ -331,9 +331,9 @@ public class Servidor {
         private void handleUsuarioDeletar(Map<String, Object> request, Map<String, Object> responseMap) {
             try {
                 String token = (String) request.get("token");
-                String senha = (String) request.get("senha");
                 
-                Usuario user = servidor.usuarioController.validarCredenciaisPorToken(token, senha);
+                // CORREÇÃO: Busca o usuário apenas pelo token, sem validar a senha
+                Usuario user = servidor.sessaoController.getUsuarioPorToken(token);
 
                 if (user != null) {
                     servidor.sessaoController.deletarSessoesPorUsuario(user.getId());
@@ -343,7 +343,7 @@ public class Servidor {
                     responseMap.put("info", "Sua conta foi deletada com sucesso.");
                 } else {
                     responseMap.put("status", false);
-                    responseMap.put("info", "Senha incorreta ou token inválido.");
+                    responseMap.put("info", "Token inválido ou sessão expirada.");
                 }
             } catch (Exception e) {
                 responseMap.put("status", false);

@@ -5,27 +5,50 @@ import newpix.controllers.JsonController;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.border.MatteBorder;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.JTableHeader;
+import javax.swing.text.JTextComponent;
 import javax.swing.text.MaskFormatter;
+import javax.swing.text.NumberFormatter;
 import java.awt.*;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TimeZone;
 
 public class MainAppFrame extends JFrame {
+    private static final NumberFormat currencyFormatter = NumberFormat.getCurrencyInstance(new Locale("pt", "BR"));
+
+    private static final Color ROXO_PRINCIPAL = new Color(95, 49, 230);
+    private static final Color CINZA_FUNDO_PAINEL = new Color(245, 245, 245);
+    private static final Color CINZA_BORDA = new Color(220, 220, 220);
+    private static final Font CAMPO_FONT = new Font("SansSerif", Font.PLAIN, 16);
+    private static final Font BOTAO_PRINCIPAL_FONT = new Font("SansSerif", Font.BOLD, 16);
+    private static final Font LABEL_FONT = new Font("SansSerif", Font.BOLD, 14);
+
+
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel mainPanel = new JPanel(cardLayout);
     private final JLabel welcomeLabel = new JLabel("Carregando...");
-    private final JLabel balanceLabel = new JLabel("Saldo: R$ --,--");
-    
+    private final JLabel balanceLabel = new JLabel("R$ --,--");
+    private final JLabel balanceTitleLabel = new JLabel("Saldo em conta");
+
+
     private DefaultTableModel extratoTableModel;
     private JFormattedTextField pixCpfField;
-    private JTextField pixValorField;
-    private JTextField depositoValorField;
+    private JFormattedTextField pixValorField;
+    private JFormattedTextField depositoValorField;
     private JTextField novoNomeField;
     private JPasswordField novaSenhaField;
 
@@ -34,11 +57,17 @@ public class MainAppFrame extends JFrame {
 
 
     public MainAppFrame() {
-        setTitle("NewPix - Sua Conta");
+        setTitle("NewPix");
         setSize(850, 650);
         setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         setLocationRelativeTo(null);
         
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
             public void windowClosing(java.awt.event.WindowEvent windowEvent) {
@@ -66,13 +95,18 @@ public class MainAppFrame extends JFrame {
 
     private JPanel createHeader(String title) {
         JPanel headerPanel = new JPanel(new BorderLayout());
-        headerPanel.setBorder(new EmptyBorder(10, 0, 20, 0));
+        headerPanel.setBorder(new EmptyBorder(15, 20, 25, 20));
+        headerPanel.setBackground(CINZA_FUNDO_PAINEL);
+        
         JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 22));
+        titleLabel.setFont(new Font("SansSerif", Font.BOLD, 24));
         titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
         headerPanel.add(titleLabel, BorderLayout.CENTER);
 
-        JButton backButton = new JButton("Voltar");
+        JButton backButton = new JButton("‹ Voltar");
+        backButton.putClientProperty("JButton.buttonType", "borderless");
+        backButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        backButton.setFont(new Font("SansSerif", Font.BOLD, 14));
         backButton.addActionListener(e -> cardLayout.show(mainPanel, "DASHBOARD"));
         headerPanel.add(backButton, BorderLayout.WEST);
 
@@ -80,60 +114,52 @@ public class MainAppFrame extends JFrame {
     }
 
     private JPanel createDashboardPanel() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        JPanel panel = new JPanel(new BorderLayout(0,0));
+        panel.setBackground(Color.WHITE);
 
-        // --- PAINEL SUPERIOR ---
-        JPanel topPanel = new JPanel();
-        topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.Y_AXIS));
-        welcomeLabel.setFont(new Font("SansSerif", Font.BOLD, 28));
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.setBackground(ROXO_PRINCIPAL);
+        topPanel.setBorder(new EmptyBorder(20, 20, 20, 20));
+
+        welcomeLabel.setFont(new Font("SansSerif", Font.BOLD, 20));
+        welcomeLabel.setForeground(Color.WHITE);
+        topPanel.add(welcomeLabel, BorderLayout.NORTH);
+
+        balanceTitleLabel.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        balanceTitleLabel.setForeground(new Color(220, 220, 220));
         
-        // --- NOVO: Container para Saldo e Botão de Atualizar ---
-        JPanel balancePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        balancePanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        balanceLabel.setFont(new Font("SansSerif", Font.PLAIN, 22));
-        balancePanel.add(balanceLabel);
+        balanceLabel.setFont(new Font("SansSerif", Font.BOLD, 36));
+        balanceLabel.setForeground(Color.WHITE);
 
-        // Adiciona um pequeno espaço
-        balancePanel.add(Box.createRigidArea(new Dimension(10, 0)));
-
-        // Cria o botão de atualizar
-        JButton refreshButton = new JButton("Atualizar Saldo");
-        refreshButton.addActionListener(e -> loadUserData());
-        balancePanel.add(refreshButton);
+        JPanel balanceContainer = new JPanel();
+        balanceContainer.setLayout(new BoxLayout(balanceContainer, BoxLayout.Y_AXIS));
+        balanceContainer.setOpaque(false);
+        balanceContainer.add(balanceTitleLabel);
+        balanceContainer.add(balanceLabel);
+        topPanel.add(balanceContainer, BorderLayout.CENTER);
         
-        topPanel.add(welcomeLabel);
-        topPanel.add(Box.createRigidArea(new Dimension(0, 10)));
-        topPanel.add(balancePanel); // Adiciona o painel com saldo e botão
+        JButton logoutButton = new JButton("Sair");
+        logoutButton.setForeground(Color.WHITE);
+        // --- MUDANÇA: Botão de sair maior ---
+        logoutButton.setFont(new Font("SansSerif", Font.BOLD, 16));
+        logoutButton.setOpaque(false);
+        logoutButton.setContentAreaFilled(false);
+        logoutButton.setBorderPainted(false);
+        logoutButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        logoutButton.addActionListener(e -> performLogout());
+        topPanel.add(logoutButton, BorderLayout.EAST);
+        
         panel.add(topPanel, BorderLayout.NORTH);
 
-        // --- PAINEL CENTRAL ---
-        JPanel centerPanel = new JPanel(new GridLayout(2, 2, 20, 20));
-        centerPanel.setBorder(new EmptyBorder(40, 20, 40, 20));
-        JButton pixButton = new JButton("Fazer um Pix");
-        JButton extratoButton = new JButton("Meu Extrato");
-        JButton depositoButton = new JButton("Depositar");
-        JButton meusDadosButton = new JButton("Meus Dados");
+        JPanel actionsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 20));
+        actionsPanel.setBorder(new EmptyBorder(30, 20, 30, 20));
+        actionsPanel.setBackground(Color.WHITE);
 
-        Font buttonFont = new Font("SansSerif", Font.BOLD, 18);
-        pixButton.setFont(buttonFont);
-        extratoButton.setFont(buttonFont);
-        depositoButton.setFont(buttonFont);
-        meusDadosButton.setFont(buttonFont);
+        JButton pixButton = createActionButton("Fazer um PIX", "→");
+        JButton extratoButton = createActionButton("Meu Extrato", "☰");
+        JButton depositoButton = createActionButton("Depositar", "+");
+        JButton meusDadosButton = createActionButton("Meus Dados", "☺");
         
-        centerPanel.add(pixButton);
-        centerPanel.add(extratoButton);
-        centerPanel.add(depositoButton);
-        centerPanel.add(meusDadosButton);
-        panel.add(centerPanel, BorderLayout.CENTER);
-
-        // --- PAINEL INFERIOR ---
-        JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton logoutButton = new JButton("Logout");
-        bottomPanel.add(logoutButton);
-        panel.add(bottomPanel, BorderLayout.SOUTH);
-
-        // --- AÇÕES DOS BOTÕES ---
         pixButton.addActionListener(e -> cardLayout.show(mainPanel, "PIX"));
         extratoButton.addActionListener(e -> {
             cardLayout.show(mainPanel, "EXTRATO");
@@ -141,53 +167,162 @@ public class MainAppFrame extends JFrame {
         });
         depositoButton.addActionListener(e -> cardLayout.show(mainPanel, "DEPOSITO"));
         meusDadosButton.addActionListener(e -> cardLayout.show(mainPanel, "MEUS_DADOS"));
-        logoutButton.addActionListener(e -> performLogout());
+
+        actionsPanel.add(pixButton);
+        actionsPanel.add(extratoButton);
+        actionsPanel.add(depositoButton);
+        actionsPanel.add(meusDadosButton);
+
+        panel.add(actionsPanel, BorderLayout.CENTER);
         
         return panel;
     }
     
-    private JPanel createPixPanel() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(new EmptyBorder(20, 100, 20, 100));
-        panel.add(createHeader("Fazer um Pix"), BorderLayout.NORTH);
+    private JButton createActionButton(String text, String iconChar) {
+        JButton button = new JButton();
+        button.setLayout(new BorderLayout());
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setPreferredSize(new Dimension(120, 100));
+        button.setBackground(new Color(245, 245, 245));
+        button.setBorder(BorderFactory.createCompoundBorder(
+            new MatteBorder(1, 1, 1, 1, new Color(220, 220, 220)),
+            new EmptyBorder(10, 10, 10, 10)
+        ));
 
-        JPanel formPanel = new JPanel(new GridBagLayout());
+        JLabel iconLabel = new JLabel(iconChar);
+        iconLabel.setFont(new Font("SansSerif", Font.BOLD, 28));
+        iconLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        
+        JLabel textLabel = new JLabel(text);
+        textLabel.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        textLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        
+        button.add(iconLabel, BorderLayout.CENTER);
+        button.add(textLabel, BorderLayout.SOUTH);
+        
+        return button;
+    }
+
+    private JFormattedTextField createValorField() {
+        DecimalFormat format = new DecimalFormat("#,##0.00");
+        format.setParseBigDecimal(true);
+        NumberFormatter formatter = new NumberFormatter(format);
+        formatter.setValueClass(Double.class);
+        formatter.setAllowsInvalid(false);
+        formatter.setCommitsOnValidEdit(true);
+        
+        JFormattedTextField textField = new JFormattedTextField(formatter);
+        textField.setFont(CAMPO_FONT);
+        textField.setHorizontalAlignment(JTextField.RIGHT);
+        textField.setBorder(BorderFactory.createCompoundBorder(
+            new MatteBorder(1, 1, 1, 1, CINZA_BORDA),
+            new EmptyBorder(10, 10, 10, 10)
+        ));
+        
+        PlaceholderUtil.addPlaceholder(textField, "0,00");
+
+        return textField;
+    }
+    
+    private JPanel createFormPanel(String title, Component... components) {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.setBackground(CINZA_FUNDO_PAINEL);
+        panel.add(createHeader(title), BorderLayout.NORTH);
+
+        JPanel formContainer = new JPanel(new GridBagLayout());
+        formContainer.setBackground(Color.WHITE);
+        formContainer.setBorder(new EmptyBorder(30, 30, 30, 30));
+        
+        JPanel formWrapper = new JPanel();
+        formWrapper.setBackground(CINZA_FUNDO_PAINEL);
+        formWrapper.setLayout(new GridBagLayout());
+        GridBagConstraints gbcWrapper = new GridBagConstraints();
+        gbcWrapper.weightx = 1.0;
+        gbcWrapper.fill = GridBagConstraints.HORIZONTAL;
+        gbcWrapper.insets = new Insets(0, 100, 0, 100);
+        formWrapper.add(formContainer, gbcWrapper);
+
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.insets = new Insets(8, 5, 8, 5);
         gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
 
-        gbc.gridx = 0; gbc.gridy = 0; formPanel.add(new JLabel("CPF do Destinatário:"), gbc);
+        for (int i = 0; i < components.length; i++) {
+            gbc.gridy = i;
+            formContainer.add(components[i], gbc);
+        }
+        
+        panel.add(formWrapper, BorderLayout.CENTER);
+        return panel;
+    }
+    
+    private JButton createPrimaryButton(String text) {
+        JButton button = new JButton(text);
+        button.setFont(BOTAO_PRINCIPAL_FONT);
+        button.setBackground(ROXO_PRINCIPAL);
+        button.setForeground(Color.WHITE);
+        button.setOpaque(true);
+        button.setBorderPainted(false);
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        button.setPreferredSize(new Dimension(100, 45));
+        return button;
+    }
+    
+    private void styleTextField(JComponent field) {
+        field.setFont(CAMPO_FONT);
+        field.setBorder(BorderFactory.createCompoundBorder(
+            new MatteBorder(1, 1, 1, 1, CINZA_BORDA),
+            new EmptyBorder(10, 10, 10, 10)
+        ));
+    }
+    
+    private JPanel createPixPanel() {
+        // --- MUDANÇA: Texto do label corrigido ---
+        JLabel cpfLabel = new JLabel("CPF do Destinatário");
+        cpfLabel.setFont(LABEL_FONT);
+        JLabel valorLabel = new JLabel("Valor a ser enviado (R$)");
+        valorLabel.setFont(LABEL_FONT);
+        
         try {
             MaskFormatter cpfFormatter = new MaskFormatter("###.###.###-##");
+            cpfFormatter.setPlaceholderCharacter(' ');
             pixCpfField = new JFormattedTextField(cpfFormatter);
         } catch (java.text.ParseException e) {
             e.printStackTrace();
             pixCpfField = new JFormattedTextField();
         }
-        pixCpfField.setColumns(15);
-        gbc.gridx = 1; formPanel.add(pixCpfField, gbc);
+        styleTextField(pixCpfField);
+        PlaceholderUtil.addPlaceholder(pixCpfField, "000.000.000-00");
         
-        gbc.gridx = 0; gbc.gridy = 1; formPanel.add(new JLabel("Valor (R$):"), gbc);
-        gbc.gridx = 1; pixValorField = new JTextField(15); formPanel.add(pixValorField, gbc);
-
-        gbc.gridy = 2; gbc.gridwidth = 2; 
-        JButton transferButton = new JButton("Transferir");
+        pixValorField = createValorField();
+        
+        JButton transferButton = createPrimaryButton("Confirmar Transferência");
         transferButton.addActionListener(e -> realizarPix());
-        formPanel.add(transferButton, gbc);
-
-        panel.add(formPanel, BorderLayout.CENTER);
-        return panel;
+        
+        return createFormPanel("Fazer um Pix", cpfLabel, pixCpfField, valorLabel, pixValorField, Box.createRigidArea(new Dimension(0, 15)), transferButton);
     }
 
     private JPanel createExtratoPanel() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(new EmptyBorder(20, 20, 20, 20));
+        JPanel panel = new JPanel(new BorderLayout(0, 0));
+        panel.setBackground(CINZA_FUNDO_PAINEL);
+        panel.setBorder(new EmptyBorder(0, 20, 20, 20));
         
-        JPanel topContainer = new JPanel(new BorderLayout());
-        topContainer.add(createHeader("Meu Extrato"), BorderLayout.NORTH);
+        panel.add(createHeader("Meu Extrato"), BorderLayout.NORTH);
 
-        JPanel controlsPanel = new JPanel(new FlowLayout());
-        controlsPanel.add(new JLabel("De:"));
+        JPanel contentPanel = new JPanel(new BorderLayout(10, 10));
+        contentPanel.setBackground(Color.WHITE);
+        contentPanel.setBorder(new EmptyBorder(15, 15, 15, 15));
+        
+        // --- MUDANÇA: Usando BorderLayout para alinhar o botão ---
+        JPanel controlsPanel = new JPanel(new BorderLayout(10,0));
+        controlsPanel.setBackground(Color.WHITE);
+
+        JPanel datePickersPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        datePickersPanel.setBackground(Color.WHITE);
+        
+        JLabel periodoLabel = new JLabel("Período:");
+        periodoLabel.setFont(LABEL_FONT);
+        datePickersPanel.add(periodoLabel);
 
         Date hoje = new Date();
         Calendar cal = Calendar.getInstance();
@@ -201,20 +336,43 @@ public class MainAppFrame extends JFrame {
         dataInicialSpinner.setEditor(new JSpinner.DateEditor(dataInicialSpinner, "dd/MM/yyyy"));
         dataFinalSpinner.setEditor(new JSpinner.DateEditor(dataFinalSpinner, "dd/MM/yyyy"));
         
-        controlsPanel.add(dataInicialSpinner);
-        controlsPanel.add(new JLabel("Até:"));
-        controlsPanel.add(dataFinalSpinner);
-
-        JButton buscarButton = new JButton("Buscar");
-        controlsPanel.add(buscarButton);
-        topContainer.add(controlsPanel, BorderLayout.CENTER);
+        datePickersPanel.add(dataInicialSpinner);
+        datePickersPanel.add(new JLabel("a"));
+        datePickersPanel.add(dataFinalSpinner);
         
-        panel.add(topContainer, BorderLayout.NORTH);
+        controlsPanel.add(datePickersPanel, BorderLayout.CENTER);
 
-        String[] colunas = {"Data/Hora", "Tipo", "Participante", "Valor (R$)"};
+        JButton buscarButton = createPrimaryButton("Buscar");
+        buscarButton.setPreferredSize(new Dimension(120, 35));
+        controlsPanel.add(buscarButton, BorderLayout.EAST);
+        
+        contentPanel.add(controlsPanel, BorderLayout.NORTH);
+
+        String[] colunas = {"", "Data/Hora", "Descrição", "Valor"};
         extratoTableModel = new DefaultTableModel(colunas, 0);
         JTable extratoTable = new JTable(extratoTableModel);
-        panel.add(new JScrollPane(extratoTable), BorderLayout.CENTER);
+        
+        extratoTable.setRowHeight(30);
+        extratoTable.setFont(new Font("SansSerif", Font.PLAIN, 14));
+        extratoTable.setGridColor(CINZA_BORDA);
+        extratoTable.setShowGrid(true);
+        extratoTable.setIntercellSpacing(new Dimension(0, 1));
+
+        JTableHeader header = extratoTable.getTableHeader();
+        header.setBackground(CINZA_FUNDO_PAINEL);
+        header.setForeground(Color.DARK_GRAY);
+        header.setFont(new Font("SansSerif", Font.BOLD, 14));
+        
+        extratoTable.setDefaultRenderer(Object.class, new ExtratoCellRenderer());
+        
+        extratoTable.getColumnModel().getColumn(0).setMaxWidth(40);
+        extratoTable.getColumnModel().getColumn(0).setMinWidth(40);
+
+        JScrollPane scrollPane = new JScrollPane(extratoTable);
+        scrollPane.setBorder(new MatteBorder(1, 1, 1, 1, CINZA_BORDA));
+        contentPanel.add(scrollPane, BorderLayout.CENTER);
+        
+        panel.add(contentPanel, BorderLayout.CENTER);
         
         buscarButton.addActionListener(e -> buscarExtrato());
 
@@ -222,72 +380,75 @@ public class MainAppFrame extends JFrame {
     }
     
     private JPanel createDepositoPanel() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(new EmptyBorder(20, 100, 20, 100));
-        panel.add(createHeader("Depositar"), BorderLayout.NORTH);
-
-        JPanel formPanel = new JPanel(new GridBagLayout());
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-
-        gbc.gridx = 0; gbc.gridy = 0; formPanel.add(new JLabel("Valor do Depósito (R$):"), gbc);
-        gbc.gridx = 1; depositoValorField = new JTextField(15); formPanel.add(depositoValorField, gbc);
+        // --- MUDANÇA: Texto do label corrigido ---
+        JLabel valorLabel = new JLabel("Valor do Depósito (R$)");
+        valorLabel.setFont(LABEL_FONT);
         
-        gbc.gridy = 1; gbc.gridwidth = 2;
-        JButton depositarButton = new JButton("Confirmar Depósito");
+        depositoValorField = createValorField();
+        
+        JButton depositarButton = createPrimaryButton("Confirmar Depósito");
         depositarButton.addActionListener(e -> realizarDeposito());
-        formPanel.add(depositarButton, gbc);
-
-        panel.add(formPanel, BorderLayout.CENTER);
-        return panel;
+        
+        return createFormPanel("Depositar", valorLabel, depositoValorField, Box.createRigidArea(new Dimension(0, 15)), depositarButton);
     }
     
     private JPanel createMeusDadosPanel() {
-        JPanel panel = new JPanel(new BorderLayout(10, 10));
-        panel.setBorder(new EmptyBorder(20, 100, 20, 100));
-        panel.add(createHeader("Meus Dados"), BorderLayout.NORTH);
+        JLabel nomeLabel = new JLabel("Novo Nome");
+        nomeLabel.setFont(LABEL_FONT);
+        novoNomeField = new JTextField();
+        styleTextField(novoNomeField);
+        PlaceholderUtil.addPlaceholder(novoNomeField, "Seu nome completo");
 
-        JPanel formPanel = new JPanel(new GridBagLayout());
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
+        JLabel senhaLabel = new JLabel("Nova Senha (mín. 6 caracteres)");
+        senhaLabel.setFont(LABEL_FONT);
+        novaSenhaField = new JPasswordField();
+        styleTextField(novaSenhaField);
+        PlaceholderUtil.addPlaceholder(novaSenhaField, "••••••");
 
-        gbc.gridx = 0; gbc.gridy = 0; formPanel.add(new JLabel("Novo Nome:"), gbc);
-        gbc.gridx = 1; novoNomeField = new JTextField(15); formPanel.add(novoNomeField, gbc);
-
-        gbc.gridx = 0; gbc.gridy = 1; formPanel.add(new JLabel("Nova Senha (mín. 8):"), gbc);
-        gbc.gridx = 1; novaSenhaField = new JPasswordField(15); formPanel.add(novaSenhaField, gbc);
-        
-        gbc.gridy = 2; gbc.gridwidth = 2;
-        JButton salvarButton = new JButton("Salvar Alterações");
+        JButton salvarButton = createPrimaryButton("Salvar Alterações");
         salvarButton.addActionListener(e -> atualizarDados());
-        formPanel.add(salvarButton, gbc);
         
-        gbc.gridy = 3; gbc.insets = new Insets(20, 5, 20, 5); formPanel.add(new JSeparator(), gbc);
+        JSeparator separator = new JSeparator();
+        separator.setForeground(CINZA_BORDA);
         
-        gbc.gridy = 4; gbc.insets = new Insets(5, 5, 5, 5);
         JButton deletarButton = new JButton("Deletar Minha Conta");
         deletarButton.setBackground(new Color(220, 53, 69));
         deletarButton.setForeground(Color.WHITE);
+        deletarButton.setOpaque(true);
+        deletarButton.setBorderPainted(false);
+        deletarButton.setFont(BOTAO_PRINCIPAL_FONT);
+        deletarButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        deletarButton.setPreferredSize(new Dimension(100, 45));
         deletarButton.addActionListener(e -> deletarConta());
-        formPanel.add(deletarButton, gbc);
 
-        panel.add(formPanel, BorderLayout.CENTER);
-        return panel;
+        return createFormPanel("Meus Dados", 
+            nomeLabel, novoNomeField, 
+            senhaLabel, novaSenhaField, 
+            Box.createRigidArea(new Dimension(0, 15)), 
+            salvarButton, 
+            Box.createRigidArea(new Dimension(0, 25)), 
+            separator, 
+            Box.createRigidArea(new Dimension(0, 25)), 
+            deletarButton
+        );
+    }
+    
+    private void loadUserData() {
+        loadUserData(false);
     }
 
-    public void loadUserData() {
+    private void loadUserData(boolean showFeedback) {
         Cliente cliente = Cliente.getInstance();
         if (cliente.getToken() == null) {
-            JOptionPane.showMessageDialog(this, "Erro: Token de sessão não encontrado. Faça o login novamente.", "Erro", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Erro: Token de sessão não encontrado.", "Erro", JOptionPane.ERROR_MESSAGE);
             performLogout();
             return;
         }
 
-        Map<String, String> request = new HashMap<>();
+        Map<String, Object> request = new HashMap<>();
         request.put("operacao", "usuario_ler");
         request.put("token", cliente.getToken());
+        request.put("show_feedback", showFeedback);
         cliente.sendMessage(JsonController.toJson(request));
     }
 
@@ -298,32 +459,41 @@ public class MainAppFrame extends JFrame {
     }
     
     private void realizarDeposito() {
-        try {
-            double valor = Double.parseDouble(depositoValorField.getText().replace(",", "."));
-            Map<String, Object> request = new HashMap<>();
-            request.put("operacao", "depositar");
-            request.put("token", Cliente.getInstance().getToken());
-            request.put("valor_enviado", valor);
-            Cliente.getInstance().sendMessage(JsonController.toJson(request));
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, "Por favor, insira um valor numérico válido.", "Erro de Formato", JOptionPane.ERROR_MESSAGE);
+        Object valorObj = depositoValorField.getValue();
+        if (valorObj == null) {
+            JOptionPane.showMessageDialog(this, "Por favor, insira um valor.", "Erro", JOptionPane.ERROR_MESSAGE);
+            return;
         }
+
+        double valor = ((Number) valorObj).doubleValue();
+        Map<String, Object> request = new HashMap<>();
+        request.put("operacao", "depositar");
+        request.put("token", Cliente.getInstance().getToken());
+        request.put("valor_enviado", valor);
+        Cliente.getInstance().sendMessage(JsonController.toJson(request));
     }
     
     private void realizarPix() {
-        try {
-            String cpfDestino = pixCpfField.getText();
-            double valor = Double.parseDouble(pixValorField.getText().replace(",", "."));
-            
-            Map<String, Object> request = new HashMap<>();
-            request.put("operacao", "transacao_criar");
-            request.put("token", Cliente.getInstance().getToken());
-            request.put("cpf_destino", cpfDestino);
-            request.put("valor", valor);
-            Cliente.getInstance().sendMessage(JsonController.toJson(request));
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, "Por favor, insira um valor numérico válido.", "Erro de Formato", JOptionPane.ERROR_MESSAGE);
+        Object valorObj = pixValorField.getValue();
+        if (valorObj == null) {
+            JOptionPane.showMessageDialog(this, "Por favor, insira um valor.", "Erro", JOptionPane.ERROR_MESSAGE);
+            return;
         }
+
+        String cpfDestino = pixCpfField.getText();
+        if(cpfDestino.trim().replace(".", "").replace("-","").isEmpty()){
+            JOptionPane.showMessageDialog(this, "Por favor, insira um CPF.", "Erro", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        double valor = ((Number) valorObj).doubleValue();
+        
+        Map<String, Object> request = new HashMap<>();
+        request.put("operacao", "transacao_criar");
+        request.put("token", Cliente.getInstance().getToken());
+        request.put("cpf_destino", cpfDestino);
+        request.put("valor", valor);
+        Cliente.getInstance().sendMessage(JsonController.toJson(request));
     }
 
     private void buscarExtrato() {
@@ -349,7 +519,7 @@ public class MainAppFrame extends JFrame {
         String novaSenha = new String(novaSenhaField.getPassword());
         
         if (novoNome.isEmpty() && novaSenha.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Preencha pelo menos um campo (novo nome ou nova senha) para atualizar.", "Atenção", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Preencha pelo menos um campo para atualizar.", "Atenção", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
@@ -361,10 +531,11 @@ public class MainAppFrame extends JFrame {
         if (!novoNome.isEmpty()) {
             userData.put("nome", novoNome);
         }
-        if (novaSenha.length() >= 8) {
+        
+        if (novaSenha.length() >= 6) {
             userData.put("senha", novaSenha);
         } else if (novaSenha.length() > 0) {
-            JOptionPane.showMessageDialog(this, "A nova senha deve ter no mínimo 8 caracteres.", "Erro", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "A nova senha deve ter no mínimo 6 caracteres.", "Erro", JOptionPane.ERROR_MESSAGE);
             return;
         }
         
@@ -373,18 +544,18 @@ public class MainAppFrame extends JFrame {
     }
 
     private void deletarConta() {
-        String senha = JOptionPane.showInputDialog(this, 
+        int response = JOptionPane.showConfirmDialog(this, 
             "<html><body width='300'><h2>Confirmar Exclusão</h2>" +
-            "<p>Esta ação é irreversível e todos os seus dados serão perdidos.</p>" +
-            "<p>Para confirmar a exclusão, digite sua senha:</p></body></html>",
+            "<p>Esta ação é irreversível.</p>" +
+            "<p><b>Deseja deletar sua conta?</b></p></body></html>",
             "Confirmar Exclusão", 
+            JOptionPane.YES_NO_OPTION,
             JOptionPane.WARNING_MESSAGE);
             
-        if (senha != null && !senha.isEmpty()) {
+        if (response == JOptionPane.YES_OPTION) {
             Map<String, String> request = new HashMap<>();
             request.put("operacao", "usuario_deletar");
             request.put("token", Cliente.getInstance().getToken());
-            request.put("senha", senha);
             Cliente.getInstance().sendMessage(JsonController.toJson(request));
         }
     }
@@ -435,7 +606,7 @@ public class MainAppFrame extends JFrame {
         
         JOptionPane.showMessageDialog(this, info, "PIX Recebido!", JOptionPane.INFORMATION_MESSAGE);
         
-        balanceLabel.setText(String.format("Saldo: R$ %.2f", novoSaldo));
+        balanceLabel.setText(currencyFormatter.format(novoSaldo));
     }
     
     private void handleUsuarioLerResponse(Map<String, Object> response) {
@@ -443,11 +614,15 @@ public class MainAppFrame extends JFrame {
         if (status != null && status) {
             @SuppressWarnings("unchecked")
             Map<String, Object> usuario = (Map<String, Object>) response.get("usuario");
-            welcomeLabel.setText("Bem-vindo(a), " + usuario.get("nome") + "!");
-            balanceLabel.setText(String.format("Saldo: R$ %.2f", (Double) usuario.get("saldo")));
+            welcomeLabel.setText("Olá, " + usuario.get("nome").toString().split(" ")[0] + "!");
             
-            // --- NOVO: Feedback visual para o usuário ---
-            JOptionPane.showMessageDialog(this, "Saldo atualizado com sucesso!", "Informação", JOptionPane.INFORMATION_MESSAGE);
+            double saldo = (Double) usuario.get("saldo");
+            balanceLabel.setText(currencyFormatter.format(saldo));
+            
+            boolean showFeedback = (boolean) response.getOrDefault("show_feedback", false);
+            if(showFeedback) {
+                JOptionPane.showMessageDialog(this, "Saldo atualizado!", "Informação", JOptionPane.INFORMATION_MESSAGE);
+            }
         } else {
             JOptionPane.showMessageDialog(this, "Erro ao carregar dados: " + response.get("info"), "Erro", JOptionPane.ERROR_MESSAGE);
             performLogout();
@@ -459,7 +634,7 @@ public class MainAppFrame extends JFrame {
         JOptionPane.showMessageDialog(this, response.get("info"), status ? "Sucesso" : "Erro", 
             status ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.ERROR_MESSAGE);
         if (status) {
-            depositoValorField.setText("");
+            depositoValorField.setValue(null);
             cardLayout.show(mainPanel, "DASHBOARD");
             loadUserData();
         }
@@ -471,7 +646,7 @@ public class MainAppFrame extends JFrame {
             status ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.ERROR_MESSAGE);
         if (status) {
             pixCpfField.setValue(null);
-            pixValorField.setText("");
+            pixValorField.setValue(null);
             cardLayout.show(mainPanel, "DASHBOARD");
             loadUserData();
         }
@@ -505,20 +680,115 @@ public class MainAppFrame extends JFrame {
         if (status) {
             List<Map<String, Object>> transacoes = (List<Map<String, Object>>) response.get("transacoes");
             
+            SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'");
+            isoFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
+            SimpleDateFormat displayFormat = new SimpleDateFormat("dd/MM/yyyy HH:mm");
+
             for (Map<String, Object> t : transacoes) {
+                Map<String, String> enviador = (Map<String, String>) t.get("usuario_enviador");
+                Map<String, String> recebedor = (Map<String, String>) t.get("usuario_recebedor");
                 String tipo = (String) t.get("tipo");
-                double valor = (Double) t.get("valor");
-                String valorFormatado = String.format("R$ %.2f", valor);
                 
-                extratoTableModel.addRow(new Object[]{
-                    t.get("data"),
-                    tipo.substring(0, 1).toUpperCase() + tipo.substring(1),
-                    t.get("outro_participante"),
-                    valorFormatado
-                });
+                String dataFormatada;
+                try {
+                    Date date = isoFormat.parse((String) t.get("criado_em"));
+                    dataFormatada = displayFormat.format(date);
+                } catch (ParseException e) {
+                    dataFormatada = (String) t.get("criado_em");
+                }
+                
+                String descricao = tipo.equals("enviada")
+                    ? "PIX Enviado para " + recebedor.get("nome")
+                    : "PIX Recebido de " + enviador.get("nome");
+                    
+                extratoTableModel.addRow(new Object[]{ t, dataFormatada, descricao, t });
             }
         } else {
             JOptionPane.showMessageDialog(this, "Erro ao buscar extrato: " + response.get("info"), "Erro", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static class ExtratoCellRenderer extends DefaultTableCellRenderer {
+        private static final Color VERDE = new Color(0, 153, 51);
+        private static final Color VERMELHO = new Color(204, 0, 0);
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+            super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+
+            Map<String, Object> transacao = (Map<String, Object>) table.getModel().getValueAt(row, 0);
+            String tipo = (String) transacao.get("tipo");
+            double valor = (Double) transacao.get("valor_enviado");
+
+            setForeground(Color.BLACK);
+            setHorizontalAlignment(SwingConstants.LEFT);
+            setFont(getFont().deriveFont(Font.PLAIN));
+
+            switch (column) {
+                case 0:
+                    setText(tipo.equals("enviada") ? "↑" : "↓");
+                    setForeground(tipo.equals("enviada") ? VERMELHO : VERDE);
+                    setFont(getFont().deriveFont(Font.BOLD, 18f));
+                    setHorizontalAlignment(SwingConstants.CENTER);
+                    break;
+                case 1:
+                    setText(table.getModel().getValueAt(row, 1).toString());
+                    break; 
+                case 2:
+                    setText(table.getModel().getValueAt(row, 2).toString());
+                    break;
+                case 3:
+                    String prefixo = tipo.equals("enviada") ? "- " : "+ ";
+                    setText(prefixo + currencyFormatter.format(valor));
+                    setForeground(tipo.equals("enviada") ? VERMELHO : VERDE);
+                    setHorizontalAlignment(SwingConstants.RIGHT);
+                    setFont(getFont().deriveFont(Font.BOLD));
+                    break;
+            }
+            
+            if (!isSelected) {
+                setBackground(row % 2 == 0 ? Color.WHITE : CINZA_FUNDO_PAINEL);
+            }
+
+            return this;
+        }
+    }
+
+    public static class PlaceholderUtil {
+        public static void addPlaceholder(JTextComponent component, String placeholder) {
+            Color placeholderColor = Color.LIGHT_GRAY;
+            Color defaultColor = component.getForeground();
+            
+            if(component.getText().isEmpty() || (component instanceof JFormattedTextField && ((JFormattedTextField)component).getValue() == null)){
+                component.setText(placeholder);
+                component.setForeground(placeholderColor);
+            }
+
+            component.addFocusListener(new FocusAdapter() {
+                @Override
+                public void focusGained(FocusEvent e) {
+                    if (component.getForeground() == placeholderColor) {
+                        component.setText("");
+                        component.setForeground(defaultColor);
+                    }
+                }
+
+                @Override
+                public void focusLost(FocusEvent e) {
+                    String text = component.getText().trim();
+                     if (component instanceof JFormattedTextField) {
+                        JFormattedTextField ftf = (JFormattedTextField) component;
+                        if (ftf.getValue() == null || ftf.getText().matches("[\\s.R$\\-,]*")) {
+                           component.setForeground(placeholderColor);
+                           component.setText(placeholder);
+                        }
+                    } else if (text.isEmpty()) {
+                        component.setForeground(placeholderColor);
+                        component.setText(placeholder);
+                    }
+                }
+            });
         }
     }
 }
