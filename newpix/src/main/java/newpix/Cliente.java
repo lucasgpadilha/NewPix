@@ -1,5 +1,6 @@
 package newpix;
 
+import newpix.controllers.JsonController;
 import newpix.views.AuthenticationFrame;
 import newpix.views.MainAppFrame;
 
@@ -9,6 +10,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Cliente {
     // --- Singleton ---
@@ -48,19 +51,30 @@ public class Cliente {
 
     public void sendMessage(String msg) {
         if (isConnected()) {
+            System.out.println("[CLIENTE - ENVIADO]: " + msg);
             out.println(msg);
         } else {
             JOptionPane.showMessageDialog(null, "Não conectado. Não é possível enviar a mensagem.", "Erro de Conexão", JOptionPane.ERROR_MESSAGE);
         }
+    }
+    
+    public void logout() {
+        if (token != null && isConnected()) {
+            Map<String, String> request = new HashMap<>();
+            request.put("operacao", "usuario_logout");
+            request.put("token", token);
+            sendMessage(JsonController.toJson(request));
+        }
+        closeConnection();
     }
 
     private void listenToServer() {
         try {
             String fromServer;
             while ((fromServer = in.readLine()) != null) {
+                System.out.println("[CLIENTE - RECEBIDO]: " + fromServer);
                 final String serverResponse = fromServer;
                 SwingUtilities.invokeLater(() -> {
-                    // Direciona a resposta para a janela que estiver ativa
                     if (authenticationFrame != null && authenticationFrame.isShowing()) {
                         authenticationFrame.handleServerResponse(serverResponse);
                     } else if (mainAppFrame != null && mainAppFrame.isShowing()) {
@@ -73,6 +87,21 @@ public class Cliente {
             SwingUtilities.invokeLater(() -> 
                 JOptionPane.showMessageDialog(null, "Conexão com o servidor perdida.", "Erro de Conexão", JOptionPane.ERROR_MESSAGE)
             );
+        } finally {
+            closeConnection();
+        }
+    }
+
+    private void closeConnection() {
+        try {
+            if (in != null) in.close();
+            if (out != null) out.close();
+            if (socket != null) socket.close();
+        } catch (IOException e) {
+            System.err.println("Erro ao fechar a conexão do cliente: " + e.getMessage());
+        } finally {
+            socket = null;
+            token = null;
         }
     }
 

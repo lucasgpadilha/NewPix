@@ -9,10 +9,12 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.text.MaskFormatter;
 import java.awt.*;
 import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
 
 public class MainAppFrame extends JFrame {
     private final CardLayout cardLayout = new CardLayout();
@@ -25,13 +27,25 @@ public class MainAppFrame extends JFrame {
     private JTextField pixValorField;
     private JTextField depositoValorField;
     private JTextField novoNomeField;
-    private JPasswordField senhaAtualField, novaSenhaField;
+    private JPasswordField novaSenhaField;
+
+    // --- Componentes do novo painel de extrato ---
+    private JSpinner dataInicialSpinner;
+    private JSpinner dataFinalSpinner;
+
 
     public MainAppFrame() {
         setTitle("NewPix - Sua Conta");
         setSize(850, 650);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
         setLocationRelativeTo(null);
+        
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent windowEvent) {
+                performLogout();
+            }
+        });
 
         JPanel dashboardPanel = createDashboardPanel();
         JPanel pixPanel = createPixPanel();
@@ -104,10 +118,13 @@ public class MainAppFrame extends JFrame {
         panel.add(bottomPanel, BorderLayout.SOUTH);
 
         pixButton.addActionListener(e -> cardLayout.show(mainPanel, "PIX"));
-        extratoButton.addActionListener(e -> cardLayout.show(mainPanel, "EXTRATO"));
+        extratoButton.addActionListener(e -> {
+            cardLayout.show(mainPanel, "EXTRATO");
+            buscarExtrato(); // Busca o extrato com as datas padrão ao abrir a tela
+        });
         depositoButton.addActionListener(e -> cardLayout.show(mainPanel, "DEPOSITO"));
         meusDadosButton.addActionListener(e -> cardLayout.show(mainPanel, "MEUS_DADOS"));
-        logoutButton.addActionListener(e -> logout());
+        logoutButton.addActionListener(e -> performLogout());
         
         return panel;
     }
@@ -152,13 +169,31 @@ public class MainAppFrame extends JFrame {
         JPanel topContainer = new JPanel(new BorderLayout());
         topContainer.add(createHeader("Meu Extrato"), BorderLayout.NORTH);
 
+        // --- PAINEL DE CONTROLES COM SELETORES DE DATA ---
         JPanel controlsPanel = new JPanel(new FlowLayout());
         controlsPanel.add(new JLabel("De:"));
-        JTextField dataInicialField = new JTextField("2025-01-01T00:00:00Z", 20);
-        controlsPanel.add(dataInicialField);
+
+        // Configura a data final (hoje)
+        Date hoje = new Date();
+
+        // Configura a data inicial (31 dias atrás)
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(hoje);
+        cal.add(Calendar.DAY_OF_MONTH, -31);
+        Date dataInicialDefault = cal.getTime();
+
+        // Cria os spinners com os valores padrão
+        dataInicialSpinner = new JSpinner(new SpinnerDateModel(dataInicialDefault, null, hoje, Calendar.DAY_OF_MONTH));
+        dataFinalSpinner = new JSpinner(new SpinnerDateModel(hoje, null, hoje, Calendar.DAY_OF_MONTH));
+
+        // Define o formato de exibição da data
+        dataInicialSpinner.setEditor(new JSpinner.DateEditor(dataInicialSpinner, "dd/MM/yyyy"));
+        dataFinalSpinner.setEditor(new JSpinner.DateEditor(dataFinalSpinner, "dd/MM/yyyy"));
+        
+        controlsPanel.add(dataInicialSpinner);
         controlsPanel.add(new JLabel("Até:"));
-        JTextField dataFinalField = new JTextField(new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'").format(new Date()), 20);
-        controlsPanel.add(dataFinalField);
+        controlsPanel.add(dataFinalSpinner);
+
         JButton buscarButton = new JButton("Buscar");
         controlsPanel.add(buscarButton);
         topContainer.add(controlsPanel, BorderLayout.CENTER);
@@ -170,7 +205,7 @@ public class MainAppFrame extends JFrame {
         JTable extratoTable = new JTable(extratoTableModel);
         panel.add(new JScrollPane(extratoTable), BorderLayout.CENTER);
         
-        buscarButton.addActionListener(e -> buscarExtrato(dataInicialField.getText(), dataFinalField.getText()));
+        buscarButton.addActionListener(e -> buscarExtrato());
 
         return panel;
     }
@@ -210,20 +245,17 @@ public class MainAppFrame extends JFrame {
         gbc.gridx = 0; gbc.gridy = 0; formPanel.add(new JLabel("Novo Nome:"), gbc);
         gbc.gridx = 1; novoNomeField = new JTextField(15); formPanel.add(novoNomeField, gbc);
 
-        gbc.gridx = 0; gbc.gridy = 1; formPanel.add(new JLabel("Senha Atual (obrigatória):"), gbc);
-        gbc.gridx = 1; senhaAtualField = new JPasswordField(15); formPanel.add(senhaAtualField, gbc);
-
-        gbc.gridx = 0; gbc.gridy = 2; formPanel.add(new JLabel("Nova Senha (mín. 8):"), gbc);
+        gbc.gridx = 0; gbc.gridy = 1; formPanel.add(new JLabel("Nova Senha (mín. 8):"), gbc);
         gbc.gridx = 1; novaSenhaField = new JPasswordField(15); formPanel.add(novaSenhaField, gbc);
         
-        gbc.gridy = 3; gbc.gridwidth = 2;
+        gbc.gridy = 2; gbc.gridwidth = 2;
         JButton salvarButton = new JButton("Salvar Alterações");
         salvarButton.addActionListener(e -> atualizarDados());
         formPanel.add(salvarButton, gbc);
         
-        gbc.gridy = 4; gbc.insets = new Insets(20, 5, 20, 5); formPanel.add(new JSeparator(), gbc);
+        gbc.gridy = 3; gbc.insets = new Insets(20, 5, 20, 5); formPanel.add(new JSeparator(), gbc);
         
-        gbc.gridy = 5; gbc.insets = new Insets(5, 5, 5, 5);
+        gbc.gridy = 4; gbc.insets = new Insets(5, 5, 5, 5);
         JButton deletarButton = new JButton("Deletar Minha Conta");
         deletarButton.setBackground(new Color(220, 53, 69));
         deletarButton.setForeground(Color.WHITE);
@@ -238,7 +270,7 @@ public class MainAppFrame extends JFrame {
         Cliente cliente = Cliente.getInstance();
         if (cliente.getToken() == null) {
             JOptionPane.showMessageDialog(this, "Erro: Token de sessão não encontrado. Faça o login novamente.", "Erro", JOptionPane.ERROR_MESSAGE);
-            logout();
+            performLogout();
             return;
         }
 
@@ -248,9 +280,10 @@ public class MainAppFrame extends JFrame {
         cliente.sendMessage(JsonController.toJson(request));
     }
 
-    private void logout() {
+    private void performLogout() {
+        Cliente.getInstance().logout();
         this.dispose();
-        new AuthenticationFrame().setVisible(true);
+        System.exit(0);
     }
     
     private void realizarDeposito() {
@@ -282,19 +315,32 @@ public class MainAppFrame extends JFrame {
         }
     }
 
-    private void buscarExtrato(String dataInicial, String dataFinal) {
+    private void buscarExtrato() {
+        // Pega as datas dos JSpinners
+        Date dataInicialDate = (Date) dataInicialSpinner.getValue();
+        Date dataFinalDate = (Date) dataFinalSpinner.getValue();
+
+        // Formata as datas para o padrão ISO 8601 UTC (yyyy-MM-dd'T'HH:mm:ss'Z')
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+        
+        String dataInicialStr = sdf.format(dataInicialDate) + "T00:00:00Z";
+        String dataFinalStr = sdf.format(dataFinalDate) + "T23:59:59Z";
+
         Map<String, String> request = new HashMap<>();
         request.put("operacao", "transacao_ler");
         request.put("token", Cliente.getInstance().getToken());
-        request.put("data_inicial", dataInicial);
-        request.put("data_final", dataFinal);
+        request.put("data_inicial", dataInicialStr);
+        request.put("data_final", dataFinalStr);
         Cliente.getInstance().sendMessage(JsonController.toJson(request));
     }
 
     private void atualizarDados() {
-        String senhaAtual = new String(senhaAtualField.getPassword());
-        if (senhaAtual.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "A senha atual é obrigatória para qualquer alteração.", "Atenção", JOptionPane.WARNING_MESSAGE);
+        String novoNome = novoNomeField.getText().trim();
+        String novaSenha = new String(novaSenhaField.getPassword());
+        
+        if (novoNome.isEmpty() && novaSenha.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Preencha pelo menos um campo (novo nome ou nova senha) para atualizar.", "Atenção", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
@@ -303,13 +349,12 @@ public class MainAppFrame extends JFrame {
         request.put("token", Cliente.getInstance().getToken());
         
         Map<String, String> userData = new HashMap<>();
-        userData.put("senha_atual", senhaAtual);
-        if (!novoNomeField.getText().trim().isEmpty()) {
-            userData.put("nome", novoNomeField.getText().trim());
+        if (!novoNome.isEmpty()) {
+            userData.put("nome", novoNome);
         }
-        if (new String(novaSenhaField.getPassword()).length() >= 8) {
-            userData.put("senha", new String(novaSenhaField.getPassword()));
-        } else if (new String(novaSenhaField.getPassword()).length() > 0) {
+        if (novaSenha.length() >= 8) {
+            userData.put("senha", novaSenha);
+        } else if (novaSenha.length() > 0) {
             JOptionPane.showMessageDialog(this, "A nova senha deve ter no mínimo 8 caracteres.", "Erro", JOptionPane.ERROR_MESSAGE);
             return;
         }
@@ -364,6 +409,10 @@ public class MainAppFrame extends JFrame {
                 case "transacao_ler":
                     handleTransacaoLerResponse(response);
                     break;
+                case "usuario_logout":
+                    this.dispose();
+                    new AuthenticationFrame().setVisible(true);
+                    break;
             }
         });
     }
@@ -377,7 +426,7 @@ public class MainAppFrame extends JFrame {
             balanceLabel.setText(String.format("Saldo: R$ %.2f", (Double) usuario.get("saldo")));
         } else {
             JOptionPane.showMessageDialog(this, "Erro ao carregar dados: " + response.get("info"), "Erro", JOptionPane.ERROR_MESSAGE);
-            logout();
+            performLogout();
         }
     }
     
@@ -410,7 +459,6 @@ public class MainAppFrame extends JFrame {
             status ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.ERROR_MESSAGE);
         if (status) {
             novoNomeField.setText("");
-            senhaAtualField.setText("");
             novaSenhaField.setText("");
             cardLayout.show(mainPanel, "DASHBOARD");
             loadUserData();
@@ -422,7 +470,7 @@ public class MainAppFrame extends JFrame {
         JOptionPane.showMessageDialog(this, response.get("info"), status ? "Sucesso" : "Erro", 
             status ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.ERROR_MESSAGE);
         if (status) {
-            logout();
+            performLogout();
         }
     }
 
@@ -432,14 +480,14 @@ public class MainAppFrame extends JFrame {
         Boolean status = (Boolean) response.getOrDefault("status", false);
         if (status) {
             List<Map<String, Object>> transacoes = (List<Map<String, Object>>) response.get("transacoes");
-            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+            
             for (Map<String, Object> t : transacoes) {
                 String tipo = (String) t.get("tipo");
                 double valor = (Double) t.get("valor");
                 String valorFormatado = String.format("R$ %.2f", valor);
                 
                 extratoTableModel.addRow(new Object[]{
-                    sdf.format(new Date((Long)t.get("data"))),
+                    t.get("data"),
                     tipo.substring(0, 1).toUpperCase() + tipo.substring(1),
                     t.get("outro_participante"),
                     valorFormatado

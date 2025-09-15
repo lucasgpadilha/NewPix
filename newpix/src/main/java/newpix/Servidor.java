@@ -72,12 +72,16 @@ public class Servidor {
     public void start(int port) {
         try {
             serverSocket = new ServerSocket(port);
-            serverFrame.addLog(getTimestamp() + " Servidor NewPix iniciado na porta: " + port);
+            String logMsg = getTimestamp() + " Servidor NewPix iniciado na porta: " + port;
+            System.out.println(logMsg);
+            serverFrame.addLog(logMsg);
             while (true) {
                 new ClientHandler(serverSocket.accept(), serverFrame, this).start();
             }
         } catch (IOException e) {
-            serverFrame.addLog(getTimestamp() + " ERRO ao iniciar o servidor: " + e.getMessage());
+            String errorMsg = getTimestamp() + " ERRO ao iniciar o servidor: " + e.getMessage();
+            System.err.println(errorMsg);
+            serverFrame.addLog(errorMsg);
         }
     }
 
@@ -101,20 +105,30 @@ public class Servidor {
                 out = new PrintWriter(clientSocket.getOutputStream(), true);
                 in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
                 serverFrame.addClient(clientInfo);
-                serverFrame.addLog(getTimestamp() + " [CONEXÃO] Cliente conectado: " + clientInfo.ip + ":" + clientInfo.port);
+                String connectMsg = getTimestamp() + " [CONEXÃO] Cliente conectado: " + clientInfo.ip + ":" + clientInfo.port;
+                System.out.println(connectMsg);
+                serverFrame.addLog(connectMsg);
 
                 String inputLine;
                 while ((inputLine = in.readLine()) != null) {
-                    serverFrame.addLog(getTimestamp() + " [RECEBIDO] De " + clientInfo.ip + ":" + clientInfo.port + ": " + inputLine);
+                    String receivedMsg = getTimestamp() + " [RECEBIDO] De " + clientInfo.ip + ":" + clientInfo.port + ": " + inputLine;
+                    System.out.println(receivedMsg);
+                    serverFrame.addLog(receivedMsg);
+                    
                     String responseJson = processarRequisicao(inputLine);
-                    serverFrame.addLog(getTimestamp() + " [ENVIADO] Para " + clientInfo.ip + ":" + clientInfo.port + ": " + responseJson);
+                    
+                    String sentMsg = getTimestamp() + " [ENVIADO] Para " + clientInfo.ip + ":" + clientInfo.port + ": " + responseJson;
+                    System.out.println(sentMsg);
+                    serverFrame.addLog(sentMsg);
                     out.println(responseJson);
                 }
             } catch (IOException e) {
                 // Silencioso
             } finally {
                 serverFrame.removeClient(clientInfo);
-                serverFrame.addLog(getTimestamp() + " [DESCONEXÃO] Cliente desconectado: " + clientInfo.ip + ":" + clientInfo.port);
+                String disconnectMsg = getTimestamp() + " [DESCONEXÃO] Cliente desconectado: " + clientInfo.ip + ":" + clientInfo.port;
+                System.out.println(disconnectMsg);
+                serverFrame.addLog(disconnectMsg);
                 try {
                     if (clientSocket != null) clientSocket.close();
                 } catch (IOException e) {
@@ -136,6 +150,9 @@ public class Servidor {
                 switch (operacao) {
                     case "usuario_login":
                         handleLogin(request, responseMap);
+                        break;
+                    case "usuario_logout":
+                        handleLogout(request, responseMap);
                         break;
                     case "usuario_criar":
                         handleCadastro(request, responseMap);
@@ -192,6 +209,19 @@ public class Servidor {
             }
         }
         
+        private void handleLogout(Map<String, Object> request, Map<String, Object> responseMap) {
+            try {
+                String token = (String) request.get("token");
+                servidor.sessaoController.deletarSessao(token);
+                responseMap.put("status", true);
+                responseMap.put("info", "Logout realizado com sucesso.");
+                serverFrame.updateClientCpf(this.clientInfo, "Não logado");
+            } catch (Exception e) {
+                responseMap.put("status", false);
+                responseMap.put("info", "Erro ao realizar logout: " + e.getMessage());
+            }
+        }
+        
         private void handleCadastro(Map<String, Object> request, Map<String, Object> responseMap) {
             try {
                 String nome = (String) request.get("nome");
@@ -245,9 +275,8 @@ public class Servidor {
                 String token = (String) request.get("token");
                 @SuppressWarnings("unchecked")
                 Map<String, String> usuarioUpdateData = (Map<String, String>) request.get("usuario");
-                String senhaAtual = usuarioUpdateData.get("senha_atual");
 
-                Usuario user = servidor.usuarioController.validarCredenciaisPorToken(token, senhaAtual);
+                Usuario user = servidor.sessaoController.getUsuarioPorToken(token);
 
                 if (user != null) {
                     String novoNome = usuarioUpdateData.get("nome");
@@ -265,7 +294,7 @@ public class Servidor {
                     responseMap.put("info", "Dados atualizados com sucesso.");
                 } else {
                     responseMap.put("status", false);
-                    responseMap.put("info", "Senha atual incorreta ou token inválido.");
+                    responseMap.put("info", "Token inválido ou sessão expirada.");
                 }
             } catch (Exception e) {
                 responseMap.put("status", false);
@@ -337,7 +366,6 @@ public class Servidor {
                 responseMap.put("info", "Transferência PIX realizada com sucesso!");
 
             } catch (SQLException e) {
-                // AGORA a mensagem de erro específica é retornada!
                 responseMap.put("status", false);
                 responseMap.put("info", e.getMessage());
             } catch (Exception e) {

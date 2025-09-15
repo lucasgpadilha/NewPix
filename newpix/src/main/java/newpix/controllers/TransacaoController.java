@@ -5,7 +5,7 @@ import newpix.dao.UsuarioDAO;
 import newpix.models.Usuario;
 
 import java.sql.SQLException;
-import java.time.LocalDate;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
@@ -42,11 +42,12 @@ public class TransacaoController {
     }
 
     public List<Map<String, Object>> buscarExtrato(int usuarioId, String dataInicialStr, String dataFinalStr) throws Exception {
+        // CORREÇÃO AQUI: Usar ZonedDateTime para interpretar a data/hora completa com fuso horário (Z = UTC)
         DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
 
         try {
-            LocalDate dataInicial = LocalDate.parse(dataInicialStr, formatter);
-            LocalDate dataFinal = LocalDate.parse(dataFinalStr, formatter);
+            ZonedDateTime dataInicial = ZonedDateTime.parse(dataInicialStr, formatter);
+            ZonedDateTime dataFinal = ZonedDateTime.parse(dataFinalStr, formatter);
 
             long dias = ChronoUnit.DAYS.between(dataInicial, dataFinal);
 
@@ -59,7 +60,7 @@ public class TransacaoController {
 
             return transacaoDAO.getExtratoPorPeriodo(usuarioId, dataInicialStr, dataFinalStr);
         } catch (DateTimeParseException e) {
-            throw new Exception("Formato de data inválido. Use yyyy-MM-dd'T'HH:mm:ss'Z'.");
+            throw new Exception("Formato de data inválido. Use yyyy-MM-dd'T'HH:mm:ss'Z'. Detalhe: " + e.getMessage());
         }
     }
 }
