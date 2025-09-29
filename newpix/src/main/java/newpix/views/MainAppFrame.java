@@ -44,6 +44,7 @@ public class MainAppFrame extends JFrame {
     private final JLabel balanceLabel = new JLabel("R$ --,--");
     private final JLabel balanceTitleLabel = new JLabel("Saldo em conta");
 
+    private boolean showFeedbackOnNextLoad = false;
 
     private DefaultTableModel extratoTableModel;
     private JFormattedTextField pixCpfField;
@@ -131,12 +132,65 @@ public class MainAppFrame extends JFrame {
         balanceLabel.setFont(new Font("SansSerif", Font.BOLD, 36));
         balanceLabel.setForeground(Color.WHITE);
 
+     // ... (código anterior)
         JPanel balanceContainer = new JPanel();
         balanceContainer.setLayout(new BoxLayout(balanceContainer, BoxLayout.Y_AXIS));
         balanceContainer.setOpaque(false);
         balanceContainer.add(balanceTitleLabel);
         balanceContainer.add(balanceLabel);
-        topPanel.add(balanceContainer, BorderLayout.CENTER);
+
+        // NOVO: Cria o botão de atualização
+        JButton refreshButton = new JButton("↻");
+        refreshButton.setFont(new Font("SansSerif", Font.BOLD, 22));
+        refreshButton.setForeground(Color.WHITE);
+        refreshButton.setOpaque(false);
+        refreshButton.setContentAreaFilled(false);
+        refreshButton.setBorderPainted(false);
+        refreshButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        refreshButton.setMargin(new Insets(0, 10, 0, 0)); 
+        // --- MUDANÇA PRINCIPAL: Remove o pontilhado de foco ---
+        refreshButton.setFocusPainted(false);
+
+        // --- MUDANÇA PRINCIPAL: Lógica de feedback ao clicar ---
+        refreshButton.addActionListener(e -> {
+            // Desabilita o botão e mostra feedback
+            refreshButton.setEnabled(false);
+            refreshButton.setText("...");
+
+            // Usa SwingWorker para não travar a interface durante a requisição
+            SwingWorker<Void, Void> worker = new SwingWorker<>() {
+                @Override
+                protected Void doInBackground() throws Exception {
+                    // A chamada de rede acontece em segundo plano
+                    loadUserData(true);
+                    return null;
+                }
+
+                @Override
+                protected void done() {
+                    // Após a requisição, reabilita o botão na thread da interface
+                    SwingUtilities.invokeLater(() -> {
+                        refreshButton.setEnabled(true);
+                        refreshButton.setText("↻");
+                    });
+                }
+            };
+            worker.execute();
+        });
+
+        // NOVO: Painel para alinhar o saldo e o botão verticalmente
+        JPanel balanceWithRefreshPanel = new JPanel();
+        balanceWithRefreshPanel.setOpaque(false);
+        // Usa um layout que alinha os componentes pelo centro vertical
+        balanceWithRefreshPanel.setLayout(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        balanceWithRefreshPanel.setAlignmentY(Component.CENTER_ALIGNMENT);
+
+        balanceWithRefreshPanel.add(balanceContainer);
+        balanceWithRefreshPanel.add(refreshButton);
+
+        // ALTERADO: Adiciona o novo painel ao painel superior
+        topPanel.add(balanceWithRefreshPanel, BorderLayout.CENTER);
+
         
         JButton logoutButton = new JButton("Sair");
         logoutButton.setForeground(Color.WHITE);
@@ -438,6 +492,8 @@ public class MainAppFrame extends JFrame {
     }
 
     private void loadUserData(boolean showFeedback) {
+    	this.showFeedbackOnNextLoad = showFeedback;
+    	
         Cliente cliente = Cliente.getInstance();
         if (cliente.getToken() == null) {
             JOptionPane.showMessageDialog(this, "Erro: Token de sessão não encontrado.", "Erro", JOptionPane.ERROR_MESSAGE);
@@ -448,7 +504,6 @@ public class MainAppFrame extends JFrame {
         Map<String, Object> request = new HashMap<>();
         request.put("operacao", "usuario_ler");
         request.put("token", cliente.getToken());
-        request.put("show_feedback", showFeedback);
         cliente.sendMessage(JsonController.toJson(request));
     }
 
@@ -616,13 +671,12 @@ public class MainAppFrame extends JFrame {
             Map<String, Object> usuario = (Map<String, Object>) response.get("usuario");
             welcomeLabel.setText("Olá, " + usuario.get("nome").toString().split(" ")[0] + "!");
             
-            double saldo = (Double) usuario.get("saldo");
+            double saldo = ((Number) usuario.get("saldo")).doubleValue(); 
             balanceLabel.setText(currencyFormatter.format(saldo));
             
-            boolean showFeedback = (boolean) response.getOrDefault("show_feedback", false);
-            if(showFeedback) {
+            if(this.showFeedbackOnNextLoad) {
                 JOptionPane.showMessageDialog(this, "Saldo atualizado!", "Informação", JOptionPane.INFORMATION_MESSAGE);
-            }
+                this.showFeedbackOnNextLoad = false;             }
         } else {
             JOptionPane.showMessageDialog(this, "Erro ao carregar dados: " + response.get("info"), "Erro", JOptionPane.ERROR_MESSAGE);
             performLogout();
