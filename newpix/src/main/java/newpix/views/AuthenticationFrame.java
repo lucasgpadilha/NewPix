@@ -211,6 +211,10 @@ public class AuthenticationFrame extends JFrame {
             mainActionButton.setEnabled(false);
             mainActionButton.setText("Aguardando...");
 
+            Map<String, String> connectRequest = new HashMap<>();
+            connectRequest.put("operacao", "conectar");
+            cliente.sendMessage(JsonController.toJson(connectRequest));
+            
             Map<String, String> request = new HashMap<>();
             if (isRegistrationMode) {
                 request.put("operacao", "usuario_criar");

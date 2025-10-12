@@ -94,7 +94,8 @@ public class Servidor {
         private PrintWriter out;
         private BufferedReader in;
         private final ClientInfo clientInfo;
-        private String loggedInCpf = null; // CPF do usuário logado nesta thread
+        private String loggedInCpf = null;
+        private boolean isConnected = false;
 
         public ClientHandler(Socket socket, Servidor servidor) {
             this.clientSocket = socket;
@@ -160,10 +161,19 @@ public class Servidor {
                 Map<String, Object> request = JsonController.fromJson(jsonRequest, new TypeReference<>() {});
                 operacao = (String) request.get("operacao");
                 responseMap.put("operacao", operacao);
+                
+                if (!isConnected && !"conectar".equals(operacao)) {
+                    responseMap.put("status", false);
+                    responseMap.put("info", "Erro, para receber uma operacao, a primeira operacao deve ser 'conectar'");
+                    return JsonController.toJson(responseMap);
+                }
 
                 Validator.validateClient(jsonRequest);
 
                 switch (operacao) {
+               		case "conectar":
+               			handleConectar(responseMap);
+               			break;
                     case "usuario_login":
                         handleLogin(request, responseMap);
                         break;
@@ -201,6 +211,12 @@ public class Servidor {
                 responseMap.put("info", "Erro no servidor: " + e.getMessage());
             }
             return JsonController.toJson(responseMap);
+        }
+        
+        private void handleConectar(Map<String, Object> responseMap) {
+            this.isConnected = true;
+            responseMap.put("status", true);
+            responseMap.put("info", "Servidor conectado com sucesso.");
         }
 
         private void handleLogin(Map<String, Object> request, Map<String, Object> responseMap) {

@@ -3,6 +3,7 @@ package newpix.validator;
 import java.util.Objects;
 
 public enum RulesEnum {
+	CONECTAR("conectar"),
     // Login e Logoff
     USUARIO_LOGIN("usuario_login"),
     USUARIO_LOGOUT("usuario_logout"),
