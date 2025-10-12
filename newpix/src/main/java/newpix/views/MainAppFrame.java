@@ -448,7 +448,6 @@ public class MainAppFrame extends JFrame {
         Map<String, Object> request = new HashMap<>();
         request.put("operacao", "usuario_ler");
         request.put("token", cliente.getToken());
-        request.put("show_feedback", showFeedback);
         cliente.sendMessage(JsonController.toJson(request));
     }
 
@@ -619,10 +618,6 @@ public class MainAppFrame extends JFrame {
             double saldo = (Double) usuario.get("saldo");
             balanceLabel.setText(currencyFormatter.format(saldo));
             
-            boolean showFeedback = (boolean) response.getOrDefault("show_feedback", false);
-            if(showFeedback) {
-                JOptionPane.showMessageDialog(this, "Saldo atualizado!", "Informação", JOptionPane.INFORMATION_MESSAGE);
-            }
         } else {
             JOptionPane.showMessageDialog(this, "Erro ao carregar dados: " + response.get("info"), "Erro", JOptionPane.ERROR_MESSAGE);
             performLogout();

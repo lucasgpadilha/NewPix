@@ -37,7 +37,7 @@ public class AuthenticationFrame extends JFrame {
     public AuthenticationFrame() {
         setTitle("NewPix");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        
+
         try {
             UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
         } catch (Exception e) {
@@ -53,7 +53,7 @@ public class AuthenticationFrame extends JFrame {
         JPanel formPanel = new JPanel(new GridBagLayout());
         formPanel.setBackground(Color.WHITE);
         formPanel.setBorder(new EmptyBorder(30, 30, 30, 30));
-        
+
         GridBagConstraints gbcWrapper = new GridBagConstraints();
         gbcWrapper.insets = new Insets(20,20,20,20);
         formWrapper.add(formPanel, gbcWrapper);
@@ -64,7 +64,7 @@ public class AuthenticationFrame extends JFrame {
         gbc.insets = new Insets(8, 5, 8, 5);
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.weightx = 1.0;
-        
+
         titleLabel = new JLabel("Bem-vindo ao NewPix");
         titleLabel.setFont(new Font("SansSerif", Font.BOLD, 24));
         titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
@@ -75,7 +75,7 @@ public class AuthenticationFrame extends JFrame {
         gbc.gridwidth = 1;
 
         gbc.gridy = 1; formPanel.add(createLabel("CPF"), gbc);
-        
+
         gbc.gridy = 2;
         try {
             MaskFormatter cpfFormatter = new MaskFormatter("###.###.###-##");
@@ -113,8 +113,7 @@ public class AuthenticationFrame extends JFrame {
         switchModeButton.setForeground(ROXO_PRINCIPAL);
         switchModeButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
         formPanel.add(switchModeButton, gbc);
-        
-        // --- MUDANÇA: Painel de conexão com título ---
+
         JPanel connectionPanel = new JPanel(new GridBagLayout());
         connectionPanel.setBorder(BorderFactory.createTitledBorder(
             new EmptyBorder(10, 10, 10, 10),
@@ -136,7 +135,7 @@ public class AuthenticationFrame extends JFrame {
 
         gbcConn.gridx = 0; gbcConn.gridy = 1; gbcConn.weightx = 0; connectionPanel.add(new JLabel("Porta:"), gbcConn);
         gbcConn.gridx = 1; gbcConn.gridy = 1; gbcConn.weightx = 1; portaField = new JTextField("20000", 15); styleTextField(portaField); connectionPanel.add(portaField, gbcConn);
-        
+
         mainPanel.add(connectionPanel, BorderLayout.SOUTH);
 
         mainActionButton.addActionListener(e -> performMainAction());
@@ -190,7 +189,7 @@ public class AuthenticationFrame extends JFrame {
                 return;
             }
         }
-        
+
         String ip = ipField.getText();
         String portaStr = portaField.getText();
 
@@ -207,26 +206,14 @@ public class AuthenticationFrame extends JFrame {
             if (!cliente.isConnected()) {
                 cliente.startConnection(ip, porta);
             }
-            
-            mainActionButton.setEnabled(false);
-            mainActionButton.setText("Aguardando...");
 
+            mainActionButton.setEnabled(false);
+            mainActionButton.setText("Conectando...");
+
+            // Etapa 1: Enviar apenas a requisição de conexão
             Map<String, String> connectRequest = new HashMap<>();
             connectRequest.put("operacao", "conectar");
             cliente.sendMessage(JsonController.toJson(connectRequest));
-            
-            Map<String, String> request = new HashMap<>();
-            if (isRegistrationMode) {
-                request.put("operacao", "usuario_criar");
-                request.put("nome", nomeField.getText());
-                request.put("cpf", cpfField.getText());
-                request.put("senha", new String(senhaField.getPassword()));
-            } else {
-                request.put("operacao", "usuario_login");
-                request.put("cpf", cpfField.getText());
-                request.put("senha", new String(senhaField.getPassword()));
-            }
-            cliente.sendMessage(JsonController.toJson(request));
 
         } catch (IOException ex) {
             JOptionPane.showMessageDialog(this, "Erro de conexão: " + ex.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
@@ -236,7 +223,7 @@ public class AuthenticationFrame extends JFrame {
             resetButton();
         }
     }
-    
+
     private void resetButton() {
         mainActionButton.setEnabled(true);
         mainActionButton.setText(isRegistrationMode ? "Confirmar Cadastro" : "Login");
@@ -246,36 +233,61 @@ public class AuthenticationFrame extends JFrame {
         Map<String, Object> response = JsonController.fromJson(jsonResponse, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
         boolean status = (boolean) response.getOrDefault("status", false);
         String info = (String) response.get("info");
+        String operacao = (String) response.get("operacao");
+
+        if ("conectar".equals(operacao)) {
+            if (status) {
+                // Etapa 2: Conexão bem-sucedida, agora enviar login/cadastro
+                mainActionButton.setText("Autenticando...");
+                Map<String, String> request = new HashMap<>();
+                if (isRegistrationMode) {
+                    request.put("operacao", "usuario_criar");
+                    request.put("nome", nomeField.getText());
+                    request.put("cpf", cpfField.getText());
+                    request.put("senha", new String(senhaField.getPassword()));
+                } else {
+                    request.put("operacao", "usuario_login");
+                    request.put("cpf", cpfField.getText());
+                    request.put("senha", new String(senhaField.getPassword()));
+                }
+                Cliente.getInstance().sendMessage(JsonController.toJson(request));
+            } else {
+                JOptionPane.showMessageDialog(this, info, "Falha na Conexão", JOptionPane.ERROR_MESSAGE);
+                resetButton();
+            }
+            return; 
+        }
 
         if (status) {
-            if (!isRegistrationMode) {
+            if ("usuario_login".equals(operacao)) {
                 Cliente.getInstance().setToken((String) response.get("token"));
                 MainAppFrame mainApp = new MainAppFrame();
                 mainApp.setVisible(true);
                 this.dispose();
                 return;
             }
-            
-            JOptionPane.showMessageDialog(this, info, "Sucesso", JOptionPane.INFORMATION_MESSAGE);
-            toggleMode();
-            cpfField.setValue(null);
-            nomeField.setText("");
-            senhaField.setText("");
-            confirmaSenhaField.setText("");
 
+            if("usuario_criar".equals(operacao)) {
+                JOptionPane.showMessageDialog(this, info, "Sucesso", JOptionPane.INFORMATION_MESSAGE);
+                toggleMode();
+                cpfField.setValue(null);
+                nomeField.setText("");
+                senhaField.setText("");
+                confirmaSenhaField.setText("");
+            }
         } else {
             JOptionPane.showMessageDialog(this, info, "Falha na Operação", JOptionPane.ERROR_MESSAGE);
         }
         
         resetButton();
     }
-    
+
     private JLabel createLabel(String text) {
         JLabel label = new JLabel(text);
         label.setFont(LABEL_FONT);
         return label;
     }
-    
+
     private JButton createPrimaryButton(String text) {
         JButton button = new JButton(text);
         button.setFont(BOTAO_PRINCIPAL_FONT);
