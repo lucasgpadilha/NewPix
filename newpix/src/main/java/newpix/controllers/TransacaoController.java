@@ -18,7 +18,6 @@ public class TransacaoController {
     private final UsuarioDAO usuarioDAO = new UsuarioDAO();
 
     public Usuario realizarTransferencia(int idRemetente, String cpfDestino, double valor) throws SQLException {
-        // --- CORREÇÃO: Validação estrita de duas casas decimais ---
         if (BigDecimal.valueOf(valor).scale() > 2) {
             throw new SQLException("O valor da transferência não pode ter mais que duas casas decimais.");
         }

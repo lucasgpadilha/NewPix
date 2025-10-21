@@ -231,6 +231,16 @@ public class AuthenticationFrame extends JFrame {
 
     public void handleServerResponse(String jsonResponse) {
         Map<String, Object> response = JsonController.fromJson(jsonResponse, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        
+        // --- CORREÇÃO ADICIONADA ---
+        // Verifica se a resposta do servidor é um JSON inválido (lixo) ou nulo
+        if (response == null) {
+            JOptionPane.showMessageDialog(this, "O servidor enviou uma resposta inválida ou corrompida.", "Erro de Protocolo", JOptionPane.ERROR_MESSAGE);
+            resetButton();
+            return;
+        }
+        // --- FIM DA CORREÇÃO ---
+
         boolean status = (boolean) response.getOrDefault("status", false);
         String info = (String) response.get("info");
         String operacao = (String) response.get("operacao");
