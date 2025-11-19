@@ -78,6 +78,16 @@ public class Servidor {
             String logMsg = getTimestamp() + " Servidor NewPix iniciado na porta: " + port;
             System.out.println(logMsg);
             serverFrame.addLog(logMsg);
+            
+            try {
+                sessaoController.limparTodasSessoes();
+                String cleanMsg = getTimestamp() + " [MANUTENÇÃO] Todas as sessões antigas foram removidas.";
+                System.out.println(cleanMsg);
+                serverFrame.addLog(cleanMsg);
+            } catch (SQLException e) {
+                System.err.println("Erro ao limpar sessões: " + e.getMessage());
+            }
+            
             while (true) {
                 new ClientHandler(serverSocket.accept(), this).start();
             }
@@ -96,6 +106,7 @@ public class Servidor {
         private final ClientInfo clientInfo;
         private String loggedInCpf = null;
         private boolean isConnected = false;
+        private String currentToken = null;
 
         public ClientHandler(Socket socket, Servidor servidor) {
             this.clientSocket = socket;
@@ -139,12 +150,21 @@ public class Servidor {
                     }
                 }
             } catch (IOException e) {
-                // Silencioso
             } finally {
-                // --- Remover cliente do mapa de ativos ao desconectar ---
+            	if (this.currentToken != null) {
+                    try {
+                        servidor.sessaoController.deletarSessao(this.currentToken);
+                        String autoLogoutMsg = getTimestamp() + " [AUTO-LOGOUT] Sessão limpa para conexão encerrada abruptamente.";
+                        System.out.println(autoLogoutMsg);
+                        serverFrame.addLog(autoLogoutMsg);
+                    } catch (Exception e) {
+                        System.err.println("Erro ao limpar sessão órfã: " + e.getMessage());
+                    }
+                }
                 if (loggedInCpf != null) {
                     servidor.activeClientsByCpf.remove(loggedInCpf);
                 }
+               
                 serverFrame.removeClient(clientInfo);
                 String disconnectMsg = getTimestamp() + " [DESCONEXÃO] Cliente desconectado: " + clientInfo.ip + ":" + clientInfo.port;
                 System.out.println(disconnectMsg);
@@ -279,6 +299,9 @@ public class Servidor {
                     responseMap.put("token", token);
                     serverFrame.updateClientCpf(this.clientInfo, cpf);
                     
+                    this.currentToken = token;
+                    responseMap.put("status", true);
+                    
                     this.loggedInCpf = cpf;
                     servidor.activeClientsByCpf.put(cpf, this);
                 } else {
@@ -295,6 +318,7 @@ public class Servidor {
             try {
                 String token = (String) request.get("token");
                 servidor.sessaoController.deletarSessao(token);
+                this.currentToken = null;
                 responseMap.put("status", true);
                 responseMap.put("info", "Logout realizado com sucesso.");
                 serverFrame.updateClientCpf(this.clientInfo, "Não logado");

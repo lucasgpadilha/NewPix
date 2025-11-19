@@ -22,4 +22,8 @@ public class SessaoController {
     public void deletarSessoesPorUsuario(int usuarioId) throws SQLException {
         sessaoDAO.deletarSessoesPorUsuario(usuarioId);
     }
+    
+    public void limparTodasSessoes() throws SQLException {
+        sessaoDAO.limparTodasSessoes();
+    }
 }

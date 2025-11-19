@@ -56,4 +56,12 @@ public class SessaoDAO {
             stmt.executeUpdate();
         }
     }
+        
+    public void limparTodasSessoes() throws SQLException {
+        String sql = "DELETE FROM sessoes";
+        try (Connection conn = DatabaseConfig.getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.executeUpdate();
+        }
+    }
 }
