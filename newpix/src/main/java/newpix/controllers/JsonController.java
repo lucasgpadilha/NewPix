@@ -10,7 +10,6 @@ public class JsonController {
         try {
             return objectMapper.writeValueAsString(obj);
         } catch (Exception e) {
-            e.printStackTrace();
             return null;
         }
     }
@@ -19,7 +18,6 @@ public class JsonController {
         try {
             return objectMapper.readValue(json, clazz);
         } catch (Exception e) {
-            e.printStackTrace();
             return null;
         }
     }
@@ -28,7 +26,6 @@ public class JsonController {
         try {
             return objectMapper.readValue(json, typeRef);
         } catch (Exception e) {
-            e.printStackTrace();
             return null;
         }
     }

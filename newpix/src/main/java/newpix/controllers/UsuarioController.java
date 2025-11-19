@@ -1,6 +1,7 @@
 package newpix.controllers;
 
 import newpix.dao.UsuarioDAO;
+import newpix.dao.TransacaoDAO; 
 import newpix.models.Usuario;
 import java.math.BigDecimal;
 import java.sql.SQLException;
@@ -8,9 +9,11 @@ import java.sql.SQLException;
 public class UsuarioController {
 
     private final UsuarioDAO usuarioDAO;
+    private final TransacaoDAO transacaoDAO; 
 
     public UsuarioController() {
         this.usuarioDAO = new UsuarioDAO();
+        this.transacaoDAO = new TransacaoDAO(); 
     }
 
     public void cadastrarUsuario(Usuario usuario) throws SQLException {
@@ -33,7 +36,8 @@ public class UsuarioController {
         usuarioDAO.deletar(id);
     }
 
-    public void depositar(int usuarioId, double valor) throws SQLException {
+
+    public void depositar(Usuario usuario, double valor) throws SQLException {
         if (BigDecimal.valueOf(valor).scale() > 2) {
             throw new SQLException("O valor do depósito não pode ter mais que duas casas decimais.");
         }
@@ -42,6 +46,7 @@ public class UsuarioController {
             throw new SQLException("Valor de depósito deve ser positivo.");
         }
         
-        usuarioDAO.atualizarSaldo(usuarioId, valor);
+
+        transacaoDAO.criarDeposito(usuario, valor);
     }
 }

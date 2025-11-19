@@ -30,7 +30,7 @@ public class Servidor {
     private final SessaoController sessaoController = new SessaoController();
     private final TransacaoController transacaoController = new TransacaoController();
     
-    // --- NOVO: Mapa para rastrear clientes ativos pelo CPF ---
+    // --- Mapa para rastrear clientes ativos pelo CPF ---
     private final Map<String, ClientHandler> activeClientsByCpf = new ConcurrentHashMap<>();
 
     public static class ClientInfo {
@@ -103,7 +103,7 @@ public class Servidor {
             this.clientInfo = new ClientInfo(socket.getInetAddress().getHostAddress(), socket.getPort());
         }
         
-        // --- NOVO: Método para enviar mensagens a este cliente específico ---
+        // --- Método para enviar mensagens a este cliente específico ---
         public void sendMessage(String message) {
             if (out != null && !clientSocket.isClosed()) {
                 out.println(message);
@@ -130,15 +130,18 @@ public class Servidor {
                     
                     String responseJson = processarRequisicao(inputLine);
                     
-                    String sentMsg = getTimestamp() + " [ENVIADO] Para " + clientInfo.ip + ":" + clientInfo.port + ": " + responseJson;
-                    System.out.println(sentMsg);
-                    serverFrame.addLog(sentMsg);
-                    out.println(responseJson);
+                    // Se responseJson for null (ex: erro_servidor), não envia nada
+                    if (responseJson != null) {
+                        String sentMsg = getTimestamp() + " [ENVIADO] Para " + clientInfo.ip + ":" + clientInfo.port + ": " + responseJson;
+                        System.out.println(sentMsg);
+                        serverFrame.addLog(sentMsg);
+                        out.println(responseJson);
+                    }
                 }
             } catch (IOException e) {
                 // Silencioso
             } finally {
-                // --- NOVO: Remover cliente do mapa de ativos ao desconectar ---
+                // --- Remover cliente do mapa de ativos ao desconectar ---
                 if (loggedInCpf != null) {
                     servidor.activeClientsByCpf.remove(loggedInCpf);
                 }
@@ -159,7 +162,27 @@ public class Servidor {
             String operacao = "desconhecida";
             try {
                 Map<String, Object> request = JsonController.fromJson(jsonRequest, new TypeReference<>() {});
+                
+                // --- CORREÇÃO CRÍTICA: Verificar se o JSON é válido antes de prosseguir ---
+                if (request == null) {
+                    responseMap.put("operacao", "desconhecida");
+                    responseMap.put("status", false);
+                    responseMap.put("info", "JSON inválido ou malformado.");
+                    return JsonController.toJson(responseMap);
+                }
+                // --------------------------------------------------------------------------
+
                 operacao = (String) request.get("operacao");
+                if (operacao == null) {
+                     // Caso o JSON seja válido ({}), mas não tenha a chave "operacao"
+                     // Protocolo 5.2 diz que deve retornar null para encerrar a conexão,
+                     // ou retornar um erro. Vamos retornar um erro amigável primeiro.
+                    responseMap.put("operacao", "desconhecida");
+                    responseMap.put("status", false);
+                    responseMap.put("info", "Campo 'operacao' ausente.");
+                    return JsonController.toJson(responseMap);
+                }
+
                 responseMap.put("operacao", operacao);
                 
                 if (!isConnected && !"conectar".equals(operacao)) {
@@ -168,6 +191,7 @@ public class Servidor {
                     return JsonController.toJson(responseMap);
                 }
 
+                // Valida o cliente ANTES de processar
                 Validator.validateClient(jsonRequest);
 
                 switch (operacao) {
@@ -201,6 +225,9 @@ public class Servidor {
                     case "transacao_ler":
                         handleTransacaoLer(request, responseMap);
                         break;
+                    case "erro_servidor": 
+                        handleErroServidor(request);
+                        return null; // Não envia resposta para erro_servidor
                     default:
                         responseMap.put("status", false);
                         responseMap.put("info", "Operação não implementada.");
@@ -210,7 +237,27 @@ public class Servidor {
                 responseMap.put("status", false);
                 responseMap.put("info", "Erro no servidor: " + e.getMessage());
             }
-            return JsonController.toJson(responseMap);
+
+            // Valida a própria resposta do servidor ANTES de enviar
+            try {
+                String jsonResponse = JsonController.toJson(responseMap);
+                Validator.validateServer(jsonResponse);
+                return jsonResponse;
+            } catch (Exception e) {
+                System.err.println("!!! ERRO GRAVE: Servidor gerou JSON inválido: " + e.getMessage() + " | JSON: " + JsonController.toJson(responseMap));
+                return "{\"operacao\":\"" + operacao + "\",\"status\":false,\"info\":\"Erro interno grave do servidor.\"}";
+            }
+        }
+
+        private void handleErroServidor(Map<String, Object> request) {
+            String operacaoEnviada = (String) request.get("operacao_enviada");
+            String infoErro = (String) request.get("info");
+            String logMsg = String.format(
+                "%s [ERRO_CLIENTE] Cliente %s:%d reportou erro de protocolo: Operacao: '%s' | Info: '%s'",
+                getTimestamp(), clientInfo.ip, clientInfo.port, operacaoEnviada, infoErro
+            );
+            System.err.println(logMsg);
+            serverFrame.addLog(logMsg);
         }
         
         private void handleConectar(Map<String, Object> responseMap) {
@@ -232,7 +279,6 @@ public class Servidor {
                     responseMap.put("token", token);
                     serverFrame.updateClientCpf(this.clientInfo, cpf);
                     
-                    // --- NOVO: Adiciona o cliente ao mapa de ativos ---
                     this.loggedInCpf = cpf;
                     servidor.activeClientsByCpf.put(cpf, this);
                 } else {
@@ -253,7 +299,6 @@ public class Servidor {
                 responseMap.put("info", "Logout realizado com sucesso.");
                 serverFrame.updateClientCpf(this.clientInfo, "Não logado");
 
-                // --- NOVO: Remove o cliente do mapa de ativos ---
                 if (loggedInCpf != null) {
                     servidor.activeClientsByCpf.remove(loggedInCpf);
                     loggedInCpf = null;
@@ -348,7 +393,6 @@ public class Servidor {
             try {
                 String token = (String) request.get("token");
                 
-                // CORREÇÃO: Busca o usuário apenas pelo token, sem validar a senha
                 Usuario user = servidor.sessaoController.getUsuarioPorToken(token);
 
                 if (user != null) {
@@ -375,7 +419,7 @@ public class Servidor {
                 Usuario user = servidor.sessaoController.getUsuarioPorToken(token);
 
                 if (user != null && valor > 0) {
-                    servidor.usuarioController.depositar(user.getId(), valor);
+                    servidor.usuarioController.depositar(user, valor);
                     responseMap.put("status", true);
                     responseMap.put("info", String.format("Depósito de R$ %.2f realizado com sucesso.", valor));
                 } else {
@@ -402,23 +446,21 @@ public class Servidor {
                     return;
                 }
                 
-                // Realiza a transferência
                 Usuario destinatario = servidor.transacaoController.realizarTransferencia(remetente.getId(), cpfDestino, valor);
                 
                 responseMap.put("status", true);
                 responseMap.put("info", "Transferência PIX realizada com sucesso!");
 
-                // --- NOVO: Lógica de notificação ---
                 ClientHandler destinatarioHandler = servidor.activeClientsByCpf.get(cpfDestino);
                 if (destinatarioHandler != null) {
                     Map<String, Object> notificacaoMap = new ConcurrentHashMap<>();
                     notificacaoMap.put("operacao", "notificacao_pix_recebido");
                     notificacaoMap.put("info", String.format("Você recebeu um PIX de R$ %.2f de %s.", valor, remetente.getNome()));
-                    notificacaoMap.put("novo_saldo", destinatario.getSaldo()); // O saldo já foi atualizado no BD
+                    Usuario destAtualizado = servidor.usuarioController.getUsuarioPorCpf(cpfDestino);
+                    notificacaoMap.put("novo_saldo", destAtualizado.getSaldo()); 
                     
                     destinatarioHandler.sendMessage(JsonController.toJson(notificacaoMap));
                 }
-                // --- FIM da lógica de notificação ---
 
             } catch (SQLException e) {
                 responseMap.put("status", false);

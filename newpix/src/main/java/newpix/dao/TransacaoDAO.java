@@ -65,16 +65,17 @@ public class TransacaoDAO {
         }
     }
 
+
     public List<Map<String, Object>> getExtratoPorPeriodo(int usuarioId, String dataInicial, String dataFinal) throws SQLException {
         List<Map<String, Object>> extrato = new ArrayList<>();
-        // CORREÇÃO: Query para buscar todos os dados necessários para o formato do protocolo
+        
         String sql = "SELECT t.id, t.valor, t.data, " +
                      "rem.nome as remetente_nome, rem.cpf as remetente_cpf, " +
                      "dest.nome as destinatario_nome, dest.cpf as destinatario_cpf, " +
                      "t.id_remetente " +
                      "FROM transacoes t " +
-                     "JOIN usuarios rem ON t.id_remetente = rem.id " +
-                     "JOIN usuarios dest ON t.id_destinatario = dest.id " +
+                     "LEFT JOIN usuarios rem ON t.id_remetente = rem.id " +
+                     "LEFT JOIN usuarios dest ON t.id_destinatario = dest.id " +
                      "WHERE (t.id_remetente = ? OR t.id_destinatario = ?) AND t.data BETWEEN ? AND ? " +
                      "ORDER BY t.data DESC";
 
@@ -88,7 +89,6 @@ public class TransacaoDAO {
 
             try (ResultSet rs = stmt.executeQuery()) {
                 while (rs.next()) {
-                    // CORREÇÃO: Montagem do mapa no formato exato do protocolo
                     Map<String, Object> transacao = new HashMap<>();
                     transacao.put("id", rs.getInt("id"));
                     transacao.put("valor_enviado", rs.getDouble("valor"));
@@ -111,7 +111,6 @@ public class TransacaoDAO {
                     transacao.put("criado_em", dataFormatada);
                     transacao.put("atualizado_em", dataFormatada);
                     
-                    // Adiciona um campo extra para facilitar a vida do front-end
                     transacao.put("tipo", rs.getInt("id_remetente") == usuarioId ? "enviada" : "recebida");
 
                     extrato.add(transacao);
@@ -119,5 +118,50 @@ public class TransacaoDAO {
             }
         }
         return extrato;
+    }
+
+    public void criarDeposito(Usuario usuario, double valor) throws SQLException {
+        String sqlUpdateSaldo = "UPDATE usuarios SET saldo = saldo + ? WHERE id = ?";
+        String sqlInsertTransacao = "INSERT INTO transacoes (id_remetente, id_destinatario, valor) VALUES (?, ?, ?)";
+        Connection conn = null;
+
+        try {
+            conn = DatabaseConfig.getConnection();
+            conn.setAutoCommit(false);
+
+            try (PreparedStatement stmt = conn.prepareStatement(sqlUpdateSaldo)) {
+                stmt.setDouble(1, valor);
+                stmt.setInt(2, usuario.getId());
+                stmt.executeUpdate();
+            }
+
+            try (PreparedStatement stmt = conn.prepareStatement(sqlInsertTransacao)) {
+                stmt.setInt(1, usuario.getId()); 
+                stmt.setInt(2, usuario.getId()); 
+                stmt.setDouble(3, valor);
+                stmt.executeUpdate();
+            }
+
+            conn.commit(); 
+
+        } catch (SQLException e) {
+            if (conn != null) {
+                try {
+                    conn.rollback(); 
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
+                }
+            }
+            throw e; 
+        } finally {
+            if (conn != null) {
+                try {
+                    conn.setAutoCommit(true);
+                    conn.close();
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 }

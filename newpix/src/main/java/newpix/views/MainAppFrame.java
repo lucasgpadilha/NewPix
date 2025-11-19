@@ -2,6 +2,7 @@ package newpix.views;
 
 import newpix.Cliente;
 import newpix.controllers.JsonController;
+import newpix.validator.Validator; 
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -137,7 +138,29 @@ public class MainAppFrame extends JFrame {
         balanceContainer.setLayout(new BoxLayout(balanceContainer, BoxLayout.Y_AXIS));
         balanceContainer.setOpaque(false);
         balanceContainer.add(balanceTitleLabel);
-        balanceContainer.add(balanceLabel);
+        
+        // --- Botão Refresh ---
+        
+        JPanel balanceLinePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        balanceLinePanel.setOpaque(false); 
+
+        balanceLinePanel.add(balanceLabel); 
+        
+        JButton refreshButton = new JButton("\u21BB"); // Símbolo ↻
+        refreshButton.setFont(new Font("SansSerif", Font.BOLD, 20));
+        refreshButton.setForeground(Color.WHITE);
+        refreshButton.setOpaque(false);
+        refreshButton.setContentAreaFilled(false);
+        refreshButton.setBorderPainted(false);
+        refreshButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        refreshButton.setToolTipText("Atualizar saldo");
+        
+        refreshButton.addActionListener(e -> loadUserData()); 
+        
+        balanceLinePanel.add(refreshButton); 
+        
+        balanceContainer.add(balanceLinePanel); 
+        
         topPanel.add(balanceContainer, BorderLayout.CENTER);
         
         JButton logoutButton = new JButton("Sair");
@@ -172,6 +195,7 @@ public class MainAppFrame extends JFrame {
             novoNomeField.setText(this.nomeAtual);
             novoNomeField.setForeground(UIManager.getColor("TextField.foreground"));
             novaSenhaField.setText("");
+            PlaceholderUtil.addPlaceholder(novaSenhaField, "••••••"); 
             cardLayout.show(mainPanel, "MEUS_DADOS");
         });
 
@@ -537,8 +561,16 @@ public class MainAppFrame extends JFrame {
         String novoNome = novoNomeField.getText().trim();
         String novaSenha = new String(novaSenhaField.getPassword());
         
-        boolean nomeMudou = !novoNome.isEmpty() && !novoNome.equals(this.nomeAtual);
-        boolean senhaMudou = !novaSenha.isEmpty();
+        String NOME_PLACEHOLDER = "Seu nome completo";
+        String SENHA_PLACEHOLDER = "••••••";
+        
+        boolean nomeMudou = !novoNome.isEmpty() 
+                            && !novoNome.equals(NOME_PLACEHOLDER) 
+                            && !novoNome.equals(this.nomeAtual);
+        
+        boolean senhaMudou = !novaSenha.isEmpty()
+                             && !novaSenha.equals(SENHA_PLACEHOLDER);
+
 
         if (!nomeMudou && !senhaMudou) {
             JOptionPane.showMessageDialog(this, "Nenhuma alteração foi feita.", "Atenção", JOptionPane.WARNING_MESSAGE);
@@ -550,15 +582,24 @@ public class MainAppFrame extends JFrame {
         request.put("token", Cliente.getInstance().getToken());
         
         Map<String, String> userData = new HashMap<>();
+        
         if (nomeMudou) {
+            if (novoNome.length() < 6 || novoNome.length() > 120) {
+                JOptionPane.showMessageDialog(this, 
+                    "O nome deve ter entre 6 e 120 caracteres.", 
+                    "Erro de Validação", 
+                    JOptionPane.ERROR_MESSAGE);
+                return;
+            }
             userData.put("nome", novoNome);
         }
         
-        if (senhaMudou && novaSenha.length() >= 6) {
+        if (senhaMudou) {
+            if (novaSenha.length() < 6) {
+                JOptionPane.showMessageDialog(this, "A nova senha deve ter no mínimo 6 caracteres.", "Erro de Validação", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
             userData.put("senha", novaSenha);
-        } else if (senhaMudou && novaSenha.length() > 0) {
-            JOptionPane.showMessageDialog(this, "A nova senha deve ter no mínimo 6 caracteres.", "Erro", JOptionPane.ERROR_MESSAGE);
-            return;
         }
         
         request.put("usuario", userData);
@@ -583,47 +624,77 @@ public class MainAppFrame extends JFrame {
     }
 
     public void handleServerResponse(String jsonResponse) {
-        Map<String, Object> response = JsonController.fromJson(jsonResponse, new com.fasterxml.jackson.core.type.TypeReference<>() {});
-        
-        if (response == null || response.get("operacao") == null) {
-            System.err.println("Resposta inválida do servidor: " + jsonResponse);
-            if (response == null) {
-                JOptionPane.showMessageDialog(this, "O servidor enviou uma resposta inválida.", "Erro de Protocolo", JOptionPane.ERROR_MESSAGE);
+        Map<String, Object> response = null;
+        String operacaoRecebida = "desconhecida";
+
+        try {
+            Validator.validateServer(jsonResponse);
+
+            // CORREÇÃO DA LINHA 645
+            response = JsonController.fromJson(jsonResponse, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            
+            if (response == null || response.get("operacao") == null) {
+                throw new Exception("Falha na desserialização do JSON ou 'operacao' ausente.");
             }
-            return;
+            
+            operacaoRecebida = (String) response.get("operacao");
+            
+            final String operacao = operacaoRecebida; 
+            final Map<String, Object> res = response; 
+            
+            SwingUtilities.invokeLater(() -> {
+                switch(operacao) {
+                    case "usuario_ler":
+                        handleUsuarioLerResponse(res);
+                        break;
+                    case "depositar":
+                        handleDepositoResponse(res);
+                        break;
+                    case "transacao_criar":
+                        handleTransacaoCriarResponse(res);
+                        break;
+                    case "usuario_atualizar":
+                        handleUsuarioAtualizarResponse(res);
+                        break;
+                    case "usuario_deletar":
+                        handleUsuarioDeletarResponse(res);
+                        break;
+                    case "transacao_ler":
+                        handleTransacaoLerResponse(res);
+                        break;
+                    case "usuario_logout":
+                        this.dispose();
+                        new AuthenticationFrame().setVisible(true);
+                        break;
+                    case "notificacao_pix_recebido":
+                        handlePixRecebido(res);
+                        break;
+                }
+            });
+
+        } catch (Exception e) {
+            System.err.println("!!! Resposta do servidor FALHOU na validação: " + e.getMessage());
+            
+            try {
+                Map<String, Object> invalidResponse = JsonController.fromJson(jsonResponse, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                if (invalidResponse != null && invalidResponse.get("operacao") != null) {
+                    operacaoRecebida = (String) invalidResponse.get("operacao");
+                }
+            } catch (Exception e2) {
+            }
+
+            Map<String, String> errorReport = new HashMap<>();
+            errorReport.put("operacao", "erro_servidor");
+            errorReport.put("operacao_enviada", operacaoRecebida);
+            errorReport.put("info", "Resposta do servidor para '" + operacaoRecebida + "' é inválida: " + e.getMessage());
+            
+            Cliente.getInstance().sendMessage(JsonController.toJson(errorReport));
+            
+            JOptionPane.showMessageDialog(this, 
+                "O servidor enviou uma resposta inesperada (protocolo quebrado). O erro foi reportado.\nDetalhe: " + e.getMessage(), 
+                "Erro de Protocolo", 
+                JOptionPane.ERROR_MESSAGE);
         }
-        
-        String operacao = (String) response.get("operacao");
-        
-        SwingUtilities.invokeLater(() -> {
-            switch(operacao) {
-                case "usuario_ler":
-                    handleUsuarioLerResponse(response);
-                    break;
-                case "depositar":
-                    handleDepositoResponse(response);
-                    break;
-                case "transacao_criar":
-                    handleTransacaoCriarResponse(response);
-                    break;
-                case "usuario_atualizar":
-                    handleUsuarioAtualizarResponse(response);
-                    break;
-                case "usuario_deletar":
-                    handleUsuarioDeletarResponse(response);
-                    break;
-                case "transacao_ler":
-                    handleTransacaoLerResponse(response);
-                    break;
-                case "usuario_logout":
-                    this.dispose();
-                    new AuthenticationFrame().setVisible(true);
-                    break;
-                case "notificacao_pix_recebido":
-                    handlePixRecebido(response);
-                    break;
-            }
-        });
     }
     
     private void handlePixRecebido(Map<String, Object> response) {
@@ -685,6 +756,7 @@ public class MainAppFrame extends JFrame {
         if (status) {
             novoNomeField.setText("");
             novaSenhaField.setText("");
+            PlaceholderUtil.addPlaceholder(novaSenhaField, "••••••"); 
             cardLayout.show(mainPanel, "DASHBOARD");
             loadUserData(); 
         }
@@ -720,6 +792,7 @@ public class MainAppFrame extends JFrame {
                 }
                 
                 boolean isEnviada = enviador.get("cpf").equals(this.cpfAtual);
+                boolean isDeposito = enviador.get("cpf").equals(recebedor.get("cpf")) && recebedor.get("cpf").equals(this.cpfAtual);
                 
                 String dataFormatada;
                 try {
@@ -736,17 +809,22 @@ public class MainAppFrame extends JFrame {
                     dataFormatada = "Data N/A";
                 }
                 
-                String descricao = isEnviada
-                    ? "PIX Enviado para " + recebedor.get("nome")
-                    : "PIX Recebido de " + enviador.get("nome");
+                String descricao;
+                if (isDeposito) {
+                    descricao = "Depósito realizado";
+                } else if (isEnviada) {
+                    descricao = "PIX Enviado para " + recebedor.get("nome");
+                } else {
+                    descricao = "PIX Recebido de " + enviador.get("nome");
+                }
                 
                 double valor = 0.0;
                 Object valorObj = t.get("valor_enviado");
                 if (valorObj instanceof Number) {
                     valor = ((Number) valorObj).doubleValue();
                 }
-                    
-                extratoTableModel.addRow(new Object[]{ isEnviada, dataFormatada, descricao, valor });
+                
+                extratoTableModel.addRow(new Object[]{ isEnviada && !isDeposito, dataFormatada, descricao, valor });
             }
         } else {
             JOptionPane.showMessageDialog(this, "Erro ao buscar extrato: " + response.get("info"), "Erro", JOptionPane.ERROR_MESSAGE);
@@ -762,7 +840,7 @@ public class MainAppFrame extends JFrame {
             super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 
             try {
-                boolean isEnviada = (Boolean) table.getModel().getValueAt(row, 0);
+                boolean isSaida = (Boolean) table.getModel().getValueAt(row, 0);
                 double valor = (Double) table.getModel().getValueAt(row, 3);
                 
                 setForeground(Color.BLACK);
@@ -771,8 +849,8 @@ public class MainAppFrame extends JFrame {
 
                 switch (column) {
                     case 0: 
-                        setText(isEnviada ? "↑" : "↓");
-                        setForeground(isEnviada ? VERMELHO : VERDE);
+                        setText(isSaida ? "↑" : "↓");
+                        setForeground(isSaida ? VERMELHO : VERDE);
                         setFont(getFont().deriveFont(Font.BOLD, 18f));
                         setHorizontalAlignment(SwingConstants.CENTER);
                         break;
@@ -783,9 +861,9 @@ public class MainAppFrame extends JFrame {
                         setText(table.getModel().getValueAt(row, 2).toString());
                         break;
                     case 3: 
-                        String prefixo = isEnviada ? "- " : "+ ";
+                        String prefixo = isSaida ? "- " : "+ ";
                         setText(prefixo + currencyFormatter.format(valor));
-                        setForeground(isEnviada ? VERMELHO : VERDE);
+                        setForeground(isSaida ? VERMELHO : VERDE);
                         setHorizontalAlignment(SwingConstants.RIGHT);
                         setFont(getFont().deriveFont(Font.BOLD));
                         break;
@@ -809,30 +887,45 @@ public class MainAppFrame extends JFrame {
             Color placeholderColor = Color.LIGHT_GRAY;
             Color defaultColor = component.getForeground();
             
-            if(component.getText().isEmpty() || (component instanceof JFormattedTextField && ((JFormattedTextField)component).getValue() == null)){
-                component.setText(placeholder);
-                component.setForeground(placeholderColor);
+            boolean isPassword = component instanceof JPasswordField;
+            
+            if (isPassword) {
+                JPasswordField pf = (JPasswordField) component;
+                if (pf.getPassword().length == 0) {
+                    pf.setText(placeholder); 
+                    pf.setForeground(placeholderColor);
+                }
+            } else {
+                 if(component.getText().isEmpty() || (component instanceof JFormattedTextField && ((JFormattedTextField)component).getValue() == null)){
+                    component.setText(placeholder);
+                    component.setForeground(placeholderColor);
+                }
             }
 
             component.addFocusListener(new FocusAdapter() {
                 @Override
                 public void focusGained(FocusEvent e) {
                     if (component.getForeground() == placeholderColor) {
-                        component.setText("");
+                        component.setText(""); 
                         component.setForeground(defaultColor);
                     }
                 }
 
                 @Override
                 public void focusLost(FocusEvent e) {
-                    String text = component.getText().trim();
-                     if (component instanceof JFormattedTextField) {
+                     if (isPassword) {
+                        JPasswordField pf = (JPasswordField) component;
+                        if (pf.getPassword().length == 0) { 
+                           pf.setForeground(placeholderColor);
+                           pf.setText(placeholder); 
+                        }
+                    } else if (component instanceof JFormattedTextField) {
                         JFormattedTextField ftf = (JFormattedTextField) component;
                         if (ftf.getValue() == null || ftf.getText().matches("[\\s.R$\\-,]*")) {
                            component.setForeground(placeholderColor);
                            component.setText(placeholder);
                         }
-                    } else if (text.isEmpty()) {
+                    } else if (component.getText().trim().isEmpty()) {
                         component.setForeground(placeholderColor);
                         component.setText(placeholder);
                     }

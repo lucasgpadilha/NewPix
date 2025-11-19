@@ -2,6 +2,7 @@ package newpix.views;
 
 import newpix.Cliente;
 import newpix.controllers.JsonController;
+import newpix.validator.Validator; // <-- IMPORT ADICIONADO
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -229,67 +230,104 @@ public class AuthenticationFrame extends JFrame {
         mainActionButton.setText(isRegistrationMode ? "Confirmar Cadastro" : "Login");
     }
 
+    // =========================================================================
+    // MÉTODO ATUALIZADO PARA INCLUIR VALIDAÇÃO E ERRO_SERVIDOR
+    // =========================================================================
     public void handleServerResponse(String jsonResponse) {
-        Map<String, Object> response = JsonController.fromJson(jsonResponse, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-        
-        // --- CORREÇÃO ADICIONADA ---
-        // Verifica se a resposta do servidor é um JSON inválido (lixo) ou nulo
-        if (response == null) {
-            JOptionPane.showMessageDialog(this, "O servidor enviou uma resposta inválida ou corrompida.", "Erro de Protocolo", JOptionPane.ERROR_MESSAGE);
-            resetButton();
-            return;
-        }
-        // --- FIM DA CORREÇÃO ---
+        Map<String, Object> response = null;
+        String operacaoRecebida = "desconhecida";
 
-        boolean status = (boolean) response.getOrDefault("status", false);
-        String info = (String) response.get("info");
-        String operacao = (String) response.get("operacao");
+        try {
+            // 1. TENTA VALIDAR A RESPOSTA DO SERVIDOR
+            Validator.validateServer(jsonResponse);
 
-        if ("conectar".equals(operacao)) {
-            if (status) {
-                // Etapa 2: Conexão bem-sucedida, agora enviar login/cadastro
-                mainActionButton.setText("Autenticando...");
-                Map<String, String> request = new HashMap<>();
-                if (isRegistrationMode) {
-                    request.put("operacao", "usuario_criar");
-                    request.put("nome", nomeField.getText());
-                    request.put("cpf", cpfField.getText());
-                    request.put("senha", new String(senhaField.getPassword()));
+            // 2. Se a validação passar, desserializa
+            response = JsonController.fromJson(jsonResponse, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            
+            if (response == null) {
+                 throw new Exception("Falha na desserialização do JSON.");
+            }
+            
+            operacaoRecebida = (String) response.get("operacao");
+            boolean status = (boolean) response.getOrDefault("status", false);
+            String info = (String) response.get("info");
+
+            // 3. Processa a resposta VÁLIDA (lógica original)
+            if ("conectar".equals(operacaoRecebida)) {
+                if (status) {
+                    // Etapa 2: Conexão bem-sucedida, agora enviar login/cadastro
+                    mainActionButton.setText("Autenticando...");
+                    Map<String, String> request = new HashMap<>();
+                    if (isRegistrationMode) {
+                        request.put("operacao", "usuario_criar");
+                        request.put("nome", nomeField.getText());
+                        request.put("cpf", cpfField.getText());
+                        request.put("senha", new String(senhaField.getPassword()));
+                    } else {
+                        request.put("operacao", "usuario_login");
+                        request.put("cpf", cpfField.getText());
+                        request.put("senha", new String(senhaField.getPassword()));
+                    }
+                    Cliente.getInstance().sendMessage(JsonController.toJson(request));
                 } else {
-                    request.put("operacao", "usuario_login");
-                    request.put("cpf", cpfField.getText());
-                    request.put("senha", new String(senhaField.getPassword()));
+                    JOptionPane.showMessageDialog(this, info, "Falha na Conexão", JOptionPane.ERROR_MESSAGE);
+                    resetButton();
                 }
-                Cliente.getInstance().sendMessage(JsonController.toJson(request));
+                return; 
+            }
+
+            if (status) {
+                if ("usuario_login".equals(operacaoRecebida)) {
+                    Cliente.getInstance().setToken((String) response.get("token"));
+                    MainAppFrame mainApp = new MainAppFrame();
+                    mainApp.setVisible(true);
+                    this.dispose();
+                    return;
+                }
+
+                if("usuario_criar".equals(operacaoRecebida)) {
+                    JOptionPane.showMessageDialog(this, info, "Sucesso", JOptionPane.INFORMATION_MESSAGE);
+                    toggleMode();
+                    cpfField.setValue(null);
+                    nomeField.setText("");
+                    senhaField.setText("");
+                    confirmaSenhaField.setText("");
+                }
             } else {
-                JOptionPane.showMessageDialog(this, info, "Falha na Conexão", JOptionPane.ERROR_MESSAGE);
-                resetButton();
+                JOptionPane.showMessageDialog(this, info, "Falha na Operação", JOptionPane.ERROR_MESSAGE);
             }
-            return; 
-        }
+            
+            resetButton();
 
-        if (status) {
-            if ("usuario_login".equals(operacao)) {
-                Cliente.getInstance().setToken((String) response.get("token"));
-                MainAppFrame mainApp = new MainAppFrame();
-                mainApp.setVisible(true);
-                this.dispose();
-                return;
+        } catch (Exception e) {
+            // 4. A VALIDAÇÃO FALHOU! Reportar erro ao servidor.
+            System.err.println("!!! Resposta do servidor FALHOU na validação: " + e.getMessage());
+            
+            // Tenta extrair a operação da resposta inválida para reportar corretamente
+            try {
+                Map<String, Object> invalidResponse = JsonController.fromJson(jsonResponse, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+                if (invalidResponse != null && invalidResponse.get("operacao") != null) {
+                    operacaoRecebida = (String) invalidResponse.get("operacao");
+                }
+            } catch (Exception e2) {
+                // Falha ao parsear, o JSON estava muito quebrado.
             }
 
-            if("usuario_criar".equals(operacao)) {
-                JOptionPane.showMessageDialog(this, info, "Sucesso", JOptionPane.INFORMATION_MESSAGE);
-                toggleMode();
-                cpfField.setValue(null);
-                nomeField.setText("");
-                senhaField.setText("");
-                confirmaSenhaField.setText("");
-            }
-        } else {
-            JOptionPane.showMessageDialog(this, info, "Falha na Operação", JOptionPane.ERROR_MESSAGE);
+            // Envia o relatório de erro
+            Map<String, String> errorReport = new HashMap<>();
+            errorReport.put("operacao", "erro_servidor");
+            errorReport.put("operacao_enviada", operacaoRecebida); // Conforme protocolo 4.11
+            errorReport.put("info", "Resposta do servidor para '" + operacaoRecebida + "' é inválida: " + e.getMessage());
+            
+            Cliente.getInstance().sendMessage(JsonController.toJson(errorReport));
+            
+            JOptionPane.showMessageDialog(this, 
+                "O servidor enviou uma resposta inesperada (protocolo quebrado). O erro foi reportado.\nDetalhe: " + e.getMessage(), 
+                "Erro de Protocolo", 
+                JOptionPane.ERROR_MESSAGE);
+            
+            resetButton();
         }
-        
-        resetButton();
     }
 
     private JLabel createLabel(String text) {
