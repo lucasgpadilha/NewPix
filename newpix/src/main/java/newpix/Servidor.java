@@ -315,12 +315,7 @@ public class Servidor {
                 String cpf = (String) request.get("cpf");
                 String senha = (String) request.get("senha");
 
-                if (servidor.usuarioController.getUsuarioPorCpf(cpf) != null) {
-                    responseMap.put("status", false);
-                    responseMap.put("info", "CPF já cadastrado.");
-                    return;
-                }
-
+             
                 Usuario novoUsuario = new Usuario(0, nome, cpf, senha, 0);
                 servidor.usuarioController.cadastrarUsuario(novoUsuario);
 
@@ -451,17 +446,7 @@ public class Servidor {
                 responseMap.put("status", true);
                 responseMap.put("info", "Transferência PIX realizada com sucesso!");
 
-                ClientHandler destinatarioHandler = servidor.activeClientsByCpf.get(cpfDestino);
-                if (destinatarioHandler != null) {
-                    Map<String, Object> notificacaoMap = new ConcurrentHashMap<>();
-                    notificacaoMap.put("operacao", "notificacao_pix_recebido");
-                    notificacaoMap.put("info", String.format("Você recebeu um PIX de R$ %.2f de %s.", valor, remetente.getNome()));
-                    Usuario destAtualizado = servidor.usuarioController.getUsuarioPorCpf(cpfDestino);
-                    notificacaoMap.put("novo_saldo", destAtualizado.getSaldo()); 
-                    
-                    destinatarioHandler.sendMessage(JsonController.toJson(notificacaoMap));
-                }
-
+              
             } catch (SQLException e) {
                 responseMap.put("status", false);
                 responseMap.put("info", e.getMessage());

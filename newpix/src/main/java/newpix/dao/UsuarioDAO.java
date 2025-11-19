@@ -10,20 +10,63 @@ import java.sql.SQLException;
 
 public class UsuarioDAO {
 
-    public void cadastrar(Usuario usuario) throws SQLException {
-        String sql = "INSERT INTO usuarios (nome, cpf, senha, saldo) VALUES (?, ?, ?, ?)";
-        try (Connection conn = DatabaseConfig.getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql)) {
+	public void cadastrar(Usuario usuario) throws SQLException {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        ResultSet rs = null;
+
+        try {
+            conn = DatabaseConfig.getConnection();
+            
+            String sqlCheck = "SELECT id, ativo FROM usuarios WHERE cpf = ?";
+            stmt = conn.prepareStatement(sqlCheck);
+            stmt.setString(1, usuario.getCpf());
+            rs = stmt.executeQuery();
+
+            if (rs.next()) {
+
+                boolean ativo = rs.getBoolean("ativo");
+                int idExistente = rs.getInt("id");
+
+                if (ativo) {
+
+                    throw new SQLException("CPF já cadastrado.");
+                } else {
+
+                    rs.close();
+                    stmt.close();
+
+                    String sqlReativar = "UPDATE usuarios SET nome = ?, senha = ?, saldo = ?, ativo = 1 WHERE id = ?";
+                    stmt = conn.prepareStatement(sqlReativar);
+                    stmt.setString(1, usuario.getNome());
+                    stmt.setString(2, usuario.getSenha());
+                    stmt.setDouble(3, 0.0); 
+                    stmt.setInt(4, idExistente);
+                    stmt.executeUpdate();
+                    return; 
+                }
+            }
+            
+ 
+            if(rs != null) rs.close();
+            if(stmt != null) stmt.close();
+
+            String sqlInsert = "INSERT INTO usuarios (nome, cpf, senha, saldo, ativo) VALUES (?, ?, ?, ?, 1)";
+            stmt = conn.prepareStatement(sqlInsert);
             stmt.setString(1, usuario.getNome());
             stmt.setString(2, usuario.getCpf());
             stmt.setString(3, usuario.getSenha());
             stmt.setDouble(4, usuario.getSaldo());
             stmt.executeUpdate();
+
+        } finally {
+            if (rs != null) rs.close();
+            if (stmt != null) stmt.close();
+            if (conn != null) conn.close();
         }
     }
-
     public Usuario login(String cpf, String senha) throws SQLException {
-        String sql = "SELECT * FROM usuarios WHERE cpf = ? AND senha = ?";
+        String sql = "SELECT * FROM usuarios WHERE cpf = ? AND senha = ? AND ativo = 1";
         try (Connection conn = DatabaseConfig.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setString(1, cpf);
@@ -42,6 +85,7 @@ public class UsuarioDAO {
         }
         return null;
     }
+
 
     public Usuario getPorCpf(String cpf) throws SQLException {
         String sql = "SELECT * FROM usuarios WHERE cpf = ?";
@@ -95,7 +139,8 @@ public class UsuarioDAO {
     }
 
     public void deletar(int id) throws SQLException {
-        String sql = "DELETE FROM usuarios WHERE id = ?";
+
+        String sql = "UPDATE usuarios SET ativo = 0 WHERE id = ?";
         try (Connection conn = DatabaseConfig.getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
             stmt.setInt(1, id);
